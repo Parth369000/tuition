@@ -95,7 +95,7 @@ lib/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/tuition.git
+git clone https://github.com/Parth369000/tuition.git
 
 # Navigate to the project directory
 cd tuition
