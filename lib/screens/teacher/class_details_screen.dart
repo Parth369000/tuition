@@ -15,6 +15,7 @@ import 'package:tuition/widgets/materials/materials_section.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'widgets/test_section.dart';
+import '../../widgets/custom_bottom_navigation.dart';
 
 class ClassDetailsScreen extends StatefulWidget {
   final int userId;
@@ -50,6 +51,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   String? selectedSubjectId;
   String? selectedMedium;
   DateTime _selectedDate = DateTime.now();
+  bool _isRefreshing = false;
 
   bool get hasAttendanceForToday {
     final today = DateTime.now().toString().split(' ')[0];
@@ -60,7 +62,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   void initState() {
     super.initState();
     selectedClass = widget.classKey;
-    selectedBatch = widget.batch;
+    selectedBatch = widget.subjectId;
     selectedSubject = widget.subject;
     selectedSubjectId = widget.subjectId;
     selectedMedium = widget.batch; // Using batch as medium
@@ -77,27 +79,100 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     return 'http://27.116.52.24:8076/${filePath.startsWith('/') ? filePath.substring(1) : filePath}';
   }
 
-  Future<void> _viewMaterial(String filePath,
+  // Helper to extract YouTube video ID from various URL formats
+  String? extractYouTubeVideoId(String url) {
+    // First try the built-in method
+    String? videoId = YoutubePlayer.convertUrlToId(url);
+    if (videoId != null) {
+      return videoId;
+    }
+
+    // Handle live stream URLs and other formats
+    final patterns = [
+      // Live stream format: https://www.youtube.com/live/VIDEO_ID
+      RegExp(r'youtube\.com/live/([a-zA-Z0-9_-]+)'),
+      // Standard format: https://www.youtube.com/watch?v=VIDEO_ID
+      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]+)'),
+      // Short format: https://youtu.be/VIDEO_ID
+      RegExp(r'youtu\.be/([a-zA-Z0-9_-]+)'),
+      // Embed format: https://www.youtube.com/embed/VIDEO_ID
+      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]+)'),
+      // Live stream with feature: https://www.youtube.com/live/VIDEO_ID?feature=shared
+      RegExp(r'youtube\.com/live/([a-zA-Z0-9_-]+)\?'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null && match.groupCount >= 1) {
+        return match.group(1);
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _viewMaterial(Map<String, dynamic> material,
       {String? category, String? name}) async {
+    final filePath = material['filePath'] ?? '';
+    final videoLink = material['videoLink'] ?? '';
     print('Original filePath: $filePath');
     print('Category: $category');
     if (category == 'file') {
-      // Show loading dialog
+      double progress = 0.0;
+      final extension = path.extension(name ?? filePath).toLowerCase();
+      String progressMessage = 'Downloading file...';
+      if (extension == '.pdf') {
+        progressMessage = 'Downloading PDF...';
+      } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+          .contains(extension)) {
+        progressMessage = 'Downloading image...';
+      }
+      // Show progress dialog
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(progressMessage),
+                    const SizedBox(height: 20),
+                    LinearProgressIndicator(value: progress),
+                    const SizedBox(height: 10),
+                    Text('${(progress * 100).toStringAsFixed(0)}%'),
+                  ],
+                ),
+              );
+            },
+          );
+        },
       );
       try {
         final fileName = name ?? path.basename(filePath);
-        final downloadedFile =
-            await MaterialUtils.downloadPdf(filePath, fileName);
+        final downloadedFile = await MaterialUtils.downloadPdf(
+          filePath,
+          fileName,
+          onProgress: (p) {
+            progress = p;
+            // Update the dialog
+            if (Navigator.of(context).canPop()) {
+              (context as Element).markNeedsBuild();
+            }
+          },
+        );
 
-        if (downloadedFile == null) {
-          throw Exception('Failed to download file');
+        if (downloadedFile == null || !await downloadedFile.exists()) {
+          Navigator.of(context).pop(); // Close progress dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('File not found after download!')),
+          );
+          return;
         }
 
-        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.of(context).pop(); // Close progress dialog
 
         // Check file extension to determine if it's an image or PDF
         final extension = path.extension(fileName).toLowerCase();
@@ -137,33 +212,19 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         } else {
           throw Exception('Unsupported file type: $extension');
         }
-      } catch (e, stackTrace) {
-        print('Error downloading file: $e');
-        print('Stack trace: $stackTrace');
-        Navigator.of(context).pop(); // Close loading dialog
+      } catch (e) {
+        Navigator.of(context).pop(); // Close progress dialog if error
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error downloading file: $e'),
-            duration: const Duration(seconds: 5),
-          ),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } else if (category == 'video') {
-      print('Opening video: $filePath');
-      // Extract video ID from URL
-      final videoId = YoutubePlayer.convertUrlToId(filePath);
-      if (videoId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid YouTube URL')),
-        );
-        return;
-      }
-
+      // Open YouTube player
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => YoutubePlayerScreen(
-            videoUrl: filePath,
-            title: name ?? 'YouTube Video',
+            videoUrl: videoLink,
+            title: name ?? 'Video',
           ),
         ),
       );
@@ -180,7 +241,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       final materialsList = await MaterialUtils.fetchMaterials(
         teacherId: widget.teacherId,
         selectedClass: selectedClass ?? '',
-        selectedBatch: selectedBatch ?? '',
+        selectedBatch: selectedBatch ?? 'A',
       );
       setState(() {
         materials = materialsList;
@@ -195,6 +256,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   Future<void> _showUploadMaterialDialog() async {
     String? materialType = 'file';
     String? youtubeUrl;
+    String? videoTitle;
     File? pickedFile;
     bool isUploading = false;
     await showDialog(
@@ -203,9 +265,17 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Upload Material'),
+              backgroundColor: AppColors.cardBackground,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18)),
+              title: Text('Upload Material',
+                  style: TextStyle(
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.bold,
+                  )),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
@@ -215,25 +285,44 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                         onChanged: (val) {
                           setState(() => materialType = val);
                         },
+                        activeColor: AppColors.secondary,
                       ),
-                      const Text('PDF'),
+                      Text('PDF',
+                          style: TextStyle(color: AppColors.textPrimary)),
                       Radio<String>(
                         value: 'video',
                         groupValue: materialType,
                         onChanged: (val) {
                           setState(() => materialType = val);
                         },
+                        activeColor: AppColors.secondary,
                       ),
-                      const Text('YouTube URL'),
+                      Text('YouTube URL',
+                          style: TextStyle(color: AppColors.textPrimary)),
                     ],
                   ),
-                  if (materialType == 'video')
+                  if (materialType == 'video') ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Video Title',
+                        hintText: 'Enter video title',
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) => videoTitle = val,
+                      style: TextStyle(color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       decoration: const InputDecoration(
                         labelText: 'YouTube URL',
+                        hintText: 'https://www.youtube.com/watch?v=...',
+                        border: OutlineInputBorder(),
                       ),
                       onChanged: (val) => youtubeUrl = val,
+                      style: TextStyle(color: AppColors.textPrimary),
                     ),
+                  ],
                   if (materialType == 'file')
                     Column(
                       children: [
@@ -250,14 +339,26 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                               });
                             }
                           },
-                          icon: const Icon(Icons.attach_file),
-                          label: const Text('Pick PDF File'),
+                          icon: Icon(Icons.attach_file,
+                              color: AppColors.secondary),
+                          label: Text('Pick PDF File',
+                              style: TextStyle(color: AppColors.secondary)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                AppColors.secondary.withOpacity(0.08),
+                            foregroundColor: AppColors.primary,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
                         if (pickedFile != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
-                                'Selected: ${pickedFile!.path.split('/').last}'),
+                              'Selected: ${pickedFile!.path.split('/').last}',
+                              style: TextStyle(color: AppColors.textPrimary),
+                            ),
                           ),
                       ],
                     ),
@@ -266,7 +367,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text('Cancel',
+                      style: TextStyle(color: AppColors.secondary)),
                 ),
                 ElevatedButton(
                   onPressed: isUploading
@@ -317,12 +419,21 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                               setState(() => isUploading = false);
                               return;
                             }
+                            if (videoTitle == null || videoTitle!.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content:
+                                          Text('Please enter a video title.')));
+                              setState(() => isUploading = false);
+                              return;
+                            }
                             try {
                               final success = await MaterialUtils.shareVideo(
                                 teacherId: widget.teacherId,
                                 selectedClass: selectedClass ?? '',
                                 selectedBatch: selectedBatch ?? '',
                                 videoLink: youtubeUrl!,
+                                videoTitle: videoTitle!,
                               );
                               if (success) {
                                 Navigator.of(context).pop();
@@ -345,13 +456,20 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                             }
                           }
                         },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.secondary,
+                    foregroundColor: AppColors.surface,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
                   child: isUploading
                       ? const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
-                      : const Text('Upload'),
+                      : Text('Upload',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -364,13 +482,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   Widget _buildMaterialsSection() {
     return MaterialsSection(
       materials: materials,
-      onViewMaterial: (filePath) {
-        // Find the material by filePath to get category and name
-        final material = materials.firstWhere(
-          (m) => m['filePath'] == filePath || m['videoLink'] == filePath,
-          orElse: () => {},
-        );
-
+      onViewMaterial: (material) {
         // Determine the category based on the material type
         String? category;
         if (material['category'] != null) {
@@ -382,9 +494,9 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         }
 
         _viewMaterial(
-          filePath,
+          material,
           category: category,
-          name: material['name'] ?? material['fileName'] ?? 'Untitled',
+          name: material['fileName'] ?? material['videoLink'] ?? 'Untitled',
         );
       },
       onUploadMaterial: _showUploadMaterialDialog,
@@ -423,7 +535,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       width: 70,
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -444,200 +556,90 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     );
   }
 
-  // Helper: Student List Item Widget
-  Widget _studentListItem(
-      {required int idx, required String name, required bool isPresent}) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: isPresent
-            ? AppColors.success.withOpacity(0.1)
-            : AppColors.error.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isPresent
-              ? AppColors.present.withOpacity(0.3)
-              : AppColors.absent.withOpacity(0.3),
-          width: 1.0,
-        ),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isPresent ? AppColors.present : AppColors.absent,
-          child: Text(
-            '${idx + 1}',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(
-          name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
-        subtitle: Text(
-          isPresent ? 'Present' : 'Absent',
-          style: TextStyle(
-            color: isPresent ? AppColors.present : AppColors.absent,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        trailing: Icon(
-          isPresent ? Icons.check_circle : Icons.cancel,
-          color: isPresent ? AppColors.present : AppColors.absent,
-        ),
-      ),
-    );
-  }
-
-  // Helper: Today's Attendance Card
-  Widget _todayAttendanceCard(
-      List todayRecords, int present, int absent, double percent) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: AppColors.cardBackground,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.all(10),
-                  child: Icon(Icons.calendar_today,
-                      color: AppColors.primary, size: 28),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Today's Attendance",
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 2),
-                      Text(
-                        DateTime.now().toString().split(' ')[0],
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: Text(
-                    '${percent.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _statBox(present, 'Present', AppColors.present),
-                const SizedBox(width: 12),
-                _statBox(absent, 'Absent', AppColors.absent),
-                const SizedBox(width: 12),
-                _statBox(todayRecords.length, 'Total', AppColors.primary),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Text('Student List',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    color: AppColors.textPrimary,
-                  )),
-            ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: todayRecords.length,
-              itemBuilder: (context, idx) {
-                final record = todayRecords[idx];
-                final studentName =
-                    '${record['Student']['fname']} ${record['Student']['lname']}';
-                final status = record['status'];
-                final isPresent = status == 'present';
-                return _studentListItem(
-                    idx: idx, name: studentName, isPresent: isPresent);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Helper: Take Attendance Card
-  Widget _takeAttendanceCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: AppColors.cardBackground,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () async {
-          await _showTakeAttendanceModal();
-        },
+  // Helper: Today's Attendance Card (summary, tap to view details)
+  Widget _todayAttendanceSummaryCard(
+      List todayRecords, int present, int absent, double percent, String date) {
+    return GestureDetector(
+      onTap: () => _showAttendanceDetailsDialog(context, date, todayRecords),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: AppColors.cardBackground,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.all(10),
-                child: Icon(Icons.calendar_today,
-                    color: AppColors.primary, size: 28),
+              Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Icon(Icons.calendar_today,
+                        color: AppColors.secondary, size: 28),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Today's Attendance",
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text(
+                          date,
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.secondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Text(
+                      '${percent.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: AppColors.secondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Today's Attendance",
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: AppColors.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text('Tap to take attendance',
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _statBox(present, 'Present', AppColors.present),
+                  const SizedBox(width: 12),
+                  _statBox(absent, 'Absent', AppColors.absent),
+                  const SizedBox(width: 12),
+                  _statBox(todayRecords.length, 'Total', AppColors.primary),
+                ],
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primaryLight.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 8),
+              const Divider(),
+              Center(
+                child: Text(
+                  'Tap to view student list',
+                  style: TextStyle(
+                    color: AppColors.secondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                child: Icon(Icons.arrow_forward_ios,
-                    color: AppColors.primary, size: 20),
               ),
             ],
           ),
@@ -647,7 +649,6 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   }
 
   // Helper: Past Attendance Card
-
   Widget _pastAttendanceCard(
       String date, int present, int absent, double percent) {
     return Card(
@@ -661,12 +662,12 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.12),
+                color: AppColors.secondary.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               padding: const EdgeInsets.all(10),
               child:
-                  Icon(Icons.access_time, color: AppColors.primary, size: 24),
+                  Icon(Icons.access_time, color: AppColors.secondary, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -684,6 +685,9 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
+                      Icon(Icons.check_circle,
+                          color: AppColors.present, size: 16),
+                      const SizedBox(width: 4),
                       Text(
                         'Present: $present',
                         style: TextStyle(
@@ -693,6 +697,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
+                      Icon(Icons.cancel, color: AppColors.absent, size: 16),
+                      const SizedBox(width: 4),
                       Text(
                         'Absent: $absent',
                         style: TextStyle(
@@ -709,13 +715,13 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.primaryLight.withOpacity(0.15),
+                color: AppColors.secondary.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 '${percent.toStringAsFixed(1)}%',
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: AppColors.secondary,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -793,69 +799,76 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: AppColors.secondary,
             ),
           ),
           const SizedBox(height: 16),
-          // Show either today's attendance or mark attendance card
+          // Show either today's attendance summary or mark attendance card
           if (todayRecords.isNotEmpty)
-            _todayAttendanceCard(
-                todayRecords, todayPresent, todayAbsent, todayPercent)
+            _todayAttendanceSummaryCard(
+                todayRecords, todayPresent, todayAbsent, todayPercent, today)
           else
             Card(
-              elevation: 2,
+              elevation: 4,
+              shadowColor: AppColors.secondary.withOpacity(0.10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.circular(18)),
+              color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 onTap: () async {
                   await _showTakeAttendanceModal();
                 },
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-                  child: Row(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  color: AppColors.cardSurface,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 20),
+                    child: Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(Icons.calendar_today,
+                              color: AppColors.secondary, size: 28),
                         ),
-                        padding: const EdgeInsets.all(10),
-                        child: Icon(Icons.calendar_today,
-                            color: AppColors.primary, size: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Take Today's Attendance",
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: AppColors.textPrimary),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'No attendance records found. Tap to mark attendance',
-                              style: TextStyle(
-                                  fontSize: 13, color: AppColors.textSecondary),
-                            ),
-                          ],
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Take Attendance",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 17,
+                                    color: AppColors.secondary),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'No attendance records found. Tap to mark attendance',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color:
+                                        AppColors.secondary.withOpacity(0.85)),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Icon(Icons.arrow_forward_ios,
+                              color: AppColors.secondary, size: 20),
                         ),
-                        child: Icon(Icons.arrow_forward_ios,
-                            color: AppColors.primary, size: 20),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -866,15 +879,16 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.history, color: AppColors.info, size: 48),
-                        SizedBox(height: 12),
+                      children: [
+                        Icon(Icons.history,
+                            color: AppColors.secondary, size: 48),
+                        const SizedBox(height: 12),
                         Text(
                           'No past attendance records found.',
                           style: TextStyle(
                             fontSize: 16,
-                            color: AppColors.info,
-                            fontWeight: FontWeight.w500,
+                            color: AppColors.secondary,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -915,20 +929,20 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       barrierDismissible: true,
       builder: (context) {
         return Dialog(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.cardBackground,
           insetPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           child: Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.background,
-                  AppColors.background.withOpacity(0.8)
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.cardBackground,
               borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -936,11 +950,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                 // Header
                 Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: AppColors.primaryGradient,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: AppColors.primary,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(20),
                       topRight: Radius.circular(20),
@@ -953,21 +963,21 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
+                          color: AppColors.secondary.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Icons.calendar_today,
-                            color: Colors.white, size: 22),
+                            color: AppColors.secondary, size: 22),
                       ),
                       const SizedBox(width: 12),
                       Text('Attendance Details',
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 17,
-                              color: Colors.white)),
+                              color: AppColors.secondary)),
                       const Spacer(),
                       IconButton(
-                        icon: Icon(Icons.close, color: AppColors.textSecondary),
+                        icon: Icon(Icons.close, color: AppColors.secondary),
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                     ],
@@ -980,7 +990,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                     children: [
                       Text('Date: $date',
                           style: TextStyle(
-                              color: AppColors.textSecondary, fontSize: 14)),
+                              color: AppColors.secondary, fontSize: 14)),
                     ],
                   ),
                 ),
@@ -1023,8 +1033,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                             horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
                           color: isPresent
-                              ? AppColors.success.withOpacity(0.1)
-                              : AppColors.error.withOpacity(0.1),
+                              ? AppColors.present.withOpacity(0.08)
+                              : AppColors.absent.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isPresent
@@ -1086,6 +1096,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
   }
 
   Future<void> _showTakeAttendanceModal() async {
+    DateTime selectedAttendanceDate = DateTime.now();
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1126,216 +1137,296 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                   backgroundColor: Colors.transparent,
                   insetPadding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-                  child: StatefulBuilder(
-                    builder: (context, setDialogState) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.secondary.withOpacity(0.08),
+                          blurRadius: 16,
+                          offset: Offset(0, 4),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: AppColors.primaryGradient,
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.secondary, AppColors.primary],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 18),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: Radius.circular(20),
-                                  topRight: Radius.circular(20),
+                                child: const Icon(Icons.calendar_today,
+                                    color: Colors.white, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Take Attendance',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                  color: Colors.white,
                                 ),
                               ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 18),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.25),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.calendar_today,
-                                        color: Colors.white, size: 22),
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.close,
+                                    color: Colors.white),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Date Picker Row
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
+                          child: Row(
+                            children: [
+                              const Text(
+                                'Date:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              InkWell(
+                                onTap: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedAttendanceDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime.now(),
+                                  );
+                                  if (picked != null) {
+                                    setModalState(() {
+                                      selectedAttendanceDate = picked;
+                                    });
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppColors.secondary.withOpacity(0.13),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Take Attendance',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 17,
-                                      color: Colors.white,
-                                    ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.date_range,
+                                          color: AppColors.secondary, size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '${selectedAttendanceDate.year}-${selectedAttendanceDate.month.toString().padLeft(2, '0')}-${selectedAttendanceDate.day.toString().padLeft(2, '0')}',
+                                        style: TextStyle(
+                                          color: AppColors.secondary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const Spacer(),
-                                  IconButton(
-                                    icon: const Icon(Icons.close,
-                                        color: Colors.white),
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(),
-                                  ),
-                                ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Student List',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 8),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  'Student List',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Flexible(
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: students.length,
-                                itemBuilder: (context, idx) {
-                                  final student = students[idx];
-                                  final studentName =
-                                      '${student['fname']} ${student['lname']}';
-                                  final studentId = student['id'] as int;
-                                  final isPresent =
-                                      attendanceMap[studentId] ?? true;
+                          ),
+                        ),
+                        Flexible(
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: students.length,
+                            itemBuilder: (context, idx) {
+                              final student = students[idx];
+                              final studentName =
+                                  '${student['fname']} ${student['lname']}';
+                              final studentId = student['id'] as int;
+                              final isPresent =
+                                  attendanceMap[studentId] ?? true;
 
-                                  return ListTile(
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(14),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.secondary
+                                            .withOpacity(0.06),
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor: AppColors.primaryLight
-                                          .withOpacity(0.15),
+                                      backgroundColor:
+                                          AppColors.secondary.withOpacity(0.13),
                                       child: Text(
                                         '${idx + 1}',
-                                        style: const TextStyle(
-                                          color: AppColors.primary,
+                                        style: TextStyle(
+                                          color: AppColors.secondary,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     ),
                                     title: Text(
                                       studentName,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      isPresent ? 'Present' : 'Absent',
+                                      style: TextStyle(
+                                        color: isPresent
+                                            ? AppColors.success
+                                            : AppColors.error,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     trailing: Switch(
                                       value: isPresent,
-                                      activeColor: Colors.green,
-                                      inactiveThumbColor: Colors.red,
-                                      inactiveTrackColor: Colors.red.shade100,
+                                      activeColor: AppColors.success,
+                                      inactiveThumbColor: AppColors.error,
+                                      inactiveTrackColor:
+                                          AppColors.error.withOpacity(0.1),
                                       onChanged: (val) {
                                         setModalState(() {
                                           attendanceMap[studentId] = val;
                                         });
                                       },
                                     ),
-                                    subtitle: Text(
-                                      isPresent ? 'Present' : 'Absent',
-                                      style: TextStyle(
-                                        color: isPresent
-                                            ? Colors.green
-                                            : Colors.red,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 16),
-                              child: SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: isSubmitting
-                                      ? null
-                                      : () async {
-                                          setDialogState(
-                                              () => isSubmitting = true);
-                                          try {
-                                            final result = await AttendanceUtils
-                                                .submitAttendance(
-                                              teacherId: widget.teacherId,
-                                              selectedClass:
-                                                  selectedClass ?? '',
-                                              subjectId: widget.subjectId ?? '',
-                                              attendanceMap: attendanceMap,
-                                            );
-
-                                            if (result['success']) {
-                                              if (mounted) {
-                                                Navigator.of(context).pop();
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                        'Attendance submitted successfully'),
-                                                    backgroundColor:
-                                                        Colors.green,
-                                                  ),
-                                                );
-                                                _loadAttendance();
-                                              }
-                                            } else {
-                                              throw Exception(
-                                                  'Failed to submit attendance: ${result['errors'].join(', ')}');
-                                            }
-                                          } catch (e) {
-                                            if (mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                SnackBar(
-                                                  content: Text('Error: $e'),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          } finally {
-                                            if (mounted) {
-                                              setDialogState(
-                                                  () => isSubmitting = false);
-                                            }
-                                          }
-                                        },
-                                  icon: isSubmitting
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
-                                          ),
-                                        )
-                                      : const Icon(Icons.save),
-                                  label: Text(isSubmitting
-                                      ? 'Submitting...'
-                                      : 'Submit Attendance'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
+                              );
+                            },
+                          ),
                         ),
-                      );
-                    },
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 18),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      setModalState(() => isSubmitting = true);
+                                      try {
+                                        final result = await AttendanceUtils
+                                            .submitAttendance(
+                                          teacherId: widget.teacherId,
+                                          selectedClass: selectedClass ?? '',
+                                          subjectId: widget.subjectId ?? '',
+                                          attendanceMap: attendanceMap,
+                                          date: selectedAttendanceDate,
+                                        );
+
+                                        if (result['success']) {
+                                          if (mounted) {
+                                            Navigator.of(context).pop();
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Attendance submitted successfully'),
+                                                backgroundColor:
+                                                    AppColors.success,
+                                              ),
+                                            );
+                                            _loadAttendance();
+                                          }
+                                        } else {
+                                          throw Exception(
+                                              'Failed to submit attendance: ${result['errors'].join(', ')}');
+                                        }
+                                      } catch (e) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text('Error: $e'),
+                                              backgroundColor: AppColors.error,
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        if (mounted) {
+                                          setModalState(
+                                              () => isSubmitting = false);
+                                        }
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 2,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                              ),
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                                Colors.white),
+                                      ),
+                                    )
+                                  : const Text('Submit Attendance',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -1346,77 +1437,113 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     );
   }
 
+  Future<void> _refreshPage() async {
+    setState(() => _isRefreshing = true);
+    await Future.wait([
+      _loadAttendance(),
+      _fetchMaterials(),
+    ]);
+    setState(() => _isRefreshing = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        backgroundColor: Colors.transparent,
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: AppColors.primaryGradient,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF2A4759), // dark blue-gray
+                Color(0xFF1E3440), // darker blue-gray
+                Color(0xFF152A35), // deepest blue-gray
+              ],
             ),
           ),
         ),
+        elevation: 4,
         title: Row(
           children: [
-            Text('Standard $selectedClass ${widget.subject} $selectedBatch'),
+            Text('Std ${selectedClass}th ${widget.subject}',
+                style: TextStyle(
+                  color: AppColors.surface,
+                  fontWeight: FontWeight.bold,
+                )),
           ],
         ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
+      body: Stack(
         children: [
-          _buildMaterialsSection(),
-          _buildAttendanceSection(),
-          TestSection(
-            teacherId: widget.teacherId,
-            selectedClass: selectedClass ?? '',
-            selectedBatch: selectedBatch ?? '',
-            subjectId: widget.subjectId,
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Materials'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Attendance',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment),
-            label: 'Tests',
-          ),
-        ],
-      ),
-      floatingActionButton: _selectedIndex == 0
-          ? Container(
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: AppColors.primaryGradient,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+          // Main content
+          Column(
+            children: [
+              Expanded(
+                child: IndexedStack(
+                  index: _selectedIndex,
+                  children: [
+                    _buildMaterialsSection(),
+                    _buildAttendanceSection(),
+                    TestSection(
+                      teacherId: widget.teacherId,
+                      selectedClass: selectedClass ?? '',
+                      selectedBatch: selectedBatch ?? '',
+                      subjectId: widget.subjectId,
+                      medium: selectedMedium ?? '',
+                    ),
+                  ],
                 ),
               ),
-              child: FloatingActionButton(
-                onPressed: _showUploadMaterialDialog,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                child: const Icon(Icons.upload_file),
-              ),
+            ],
+          ),
+        ],
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.08),
+              blurRadius: 8,
+              offset: Offset(0, -2),
+            ),
+          ],
+        ),
+        child: CustomBottomNavigation(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          items: [
+            BottomNavigationItem(
+              icon: Icons.menu_book_outlined,
+              label: 'Materials',
+            ),
+            BottomNavigationItem(
+              icon: Icons.calendar_today_outlined,
+              label: 'Attendance',
+            ),
+            BottomNavigationItem(
+              icon: Icons.assignment_outlined,
+              label: 'Tests',
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: _showUploadMaterialDialog,
+              backgroundColor: AppColors.secondary,
+              child: const Icon(Icons.upload_file, color: Colors.white),
             )
           : null,
     );

@@ -1,24 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:tuition/screens/admin/widgets/TeachersTabWidget.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:ui';
+import '../../controllers/subject_controller.dart';
+import '../../models/subject.dart';
 import '../../models/teacher.dart';
+import '../../models/teacher_class.dart';
 import '../login_screen.dart';
 import '../../models/student.dart';
 import '../../controllers/teacher_controller.dart';
 import 'widgets/student_card.dart';
 import 'widgets/student_details_sheet.dart';
 import 'widgets/student_list_header.dart';
-import 'widgets/attendance_section.dart';
-import 'widgets/attendance_history_section.dart';
 import 'widgets/teacher_form.dart';
 import 'widgets/add_student.dart';
 import 'package:tuition/core/themes/app_colors.dart';
 import 'class_student_list_screen.dart';
-import '../../controllers/teacher_controller.dart';
-import '../../models/teacher_subject.dart';
 import 'package:flutter/rendering.dart';
+import 'attendance_records_screen.dart';
+import 'take_attendance_screen.dart';
+import 'admin_materials_screen.dart';
+import 'admin_report_students_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({
@@ -45,7 +49,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   void initState() {
     super.initState();
     _loadStudents();
-    _loadTeachers();
   }
 
   @override
@@ -134,6 +137,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           setState(() {
             _students = data['data'] ?? [];
             _filteredStudents = _students;
+            // sorting students by class
+            _filteredStudents.sort((a, b) {
+              final classA = a['class']?.toString() ?? '';
+              final classB = b['class']?.toString() ?? '';
+              return classA.compareTo(classB);
+            });
             _isLoading = false;
           });
         } else {
@@ -148,49 +157,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       setState(() {
         _error = 'Error loading students: $e';
         _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadTeachers() async {
-    try {
-      final response = await http.post(
-          Uri.parse('http://27.116.52.24:8076/getData'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({"table": "Teacher"}));
-
-      if (response.statusCode == 200) {
-        // Check if response is JSON
-        if (response.headers['content-type']?.contains('application/json') ??
-            false) {
-          final data = json.decode(response.body);
-          setState(() {
-            _teachers = (data['data'] ?? []);
-            print(_teachers.toList());
-            if (_teachers.isEmpty) {
-              _error = 'No Teacher Available';
-            } else {
-              _error = null;
-            }
-          });
-        } else {
-          print(
-              'Invalid response format: Expected JSON but got ${response.headers['content-type']}');
-          setState(() {
-            _teachers = [];
-          });
-        }
-      } else {
-        print(
-            'Failed to load teachers: ${response.statusCode} ${response.reasonPhrase}');
-        setState(() {
-          _teachers = [];
-        });
-      }
-    } catch (e) {
-      print('Error loading teachers: $e');
-      setState(() {
-        _teachers = [];
       });
     }
   }
@@ -223,50 +189,104 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       MaterialPageRoute(
         builder: (context) => const TeacherForm(),
       ),
-    ).then((_) => _loadTeachers()); // Refresh the list when returning
+    ).then((_) => TeachersTabWidget()); // Refresh the list when returning
   }
 
-  void _logout() {
+  void _logout() async {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        backgroundColor: AppColors.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: AppColors.glassBorder,
+            width: 1.5,
+          ),
+        ),
+        title: Text(
+          'Logout',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 16,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
-          TextButton(
-            onPressed: () {
+          ElevatedButton(
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
               Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const LoginScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
                 (route) => false,
               );
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 2,
+            ),
             child: const Text(
               'Logout',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       ),
     );
+  }
+
+  void showError(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
         leading: Container(
-          margin: const EdgeInsets.all(12),
+          margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.glassBackground,
+            color: Colors.white.withOpacity(0.2),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: AppColors.glassBorder,
+              color: Colors.white.withOpacity(0.3),
               width: 1,
             ),
           ),
@@ -279,7 +299,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             onPressed: () {},
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            splashRadius: 24,
+            splashRadius: 20,
           ),
         ),
         centerTitle: false,
@@ -289,33 +309,40 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             'Admin Dashboard',
             style: TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w600,
-              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              fontSize: 22,
+              letterSpacing: 0.5,
+              shadows: [
+                Shadow(
+                  color: Colors.black26,
+                  offset: Offset(0, 1),
+                  blurRadius: 3,
+                ),
+              ],
             ),
           ),
         ),
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: AppColors.primaryGradient,
-                ),
-              ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF2A4759), // Your dark blue-gray
+                Color(0xFF1E3440), // Darker blue-gray
+                Color(0xFF152A35), // Deepest blue-gray
+              ],
             ),
           ),
         ),
         actions: [
           Container(
-            margin: const EdgeInsets.all(12),
+            margin: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.glassBackground,
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: AppColors.glassBorder,
+                color: Colors.white.withOpacity(0.3),
                 width: 1,
               ),
             ),
@@ -328,7 +355,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               onPressed: _logout,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              splashRadius: 24,
+              splashRadius: 20,
             ),
           ),
         ],
@@ -338,26 +365,102 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         children: [
           // Students Tab
           Scaffold(
-            body: RefreshIndicator(
-              onRefresh: () async {
-                await _loadStudents();
-                await _loadTeachers();
-              },
-              child: Column(
-                children: [
-                  if (_isLoading)
-                    const Expanded(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_error != null)
-                    Expanded(
-                      child: Center(
+            backgroundColor: AppColors.scaffoldBackground,
+            body: Container(
+              color: AppColors.scaffoldBackground,
+              child: RefreshIndicator(
+                color: AppColors.primaryLight,
+                backgroundColor: AppColors.scaffoldBackground,
+                onRefresh: () async {
+                  await _loadStudents();
+                },
+                child: Stack(
+                  children: [
+                    // Main content (student list)
+                    if (!_isLoading && _error == null)
+                      Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.people,
+                                    color: AppColors.primaryDark, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Total Students: ',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16),
+                                ),
+                                Text(
+                                  _filteredStudents.length.toString(),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: AppColors.primary),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  // decorate the button
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(15),
+                                    border: Border.all(
+                                      color: AppColors.primary.withOpacity(0.3),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                            Icons.add_circle_outline,
+                                            color: AppColors.secondary,
+                                            size: 28),
+                                        tooltip: 'Add Student',
+                                        onPressed: _showAddStudentForm,
+                                      ),
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 10.0),
+                                        child: Text(
+                                          'Add Student',
+                                          style: TextStyle(
+                                            color: AppColors.secondary,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildGroupedStudentList(),
+                          ),
+                        ],
+                      ),
+                    // Loading indicator
+                    if (_isLoading)
+                      Center(
+                        child: CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(AppColors.primary),
+                        ),
+                      ),
+                    // Error message
+                    if (_error != null && !_isLoading)
+                      Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               _error!,
-                              style: const TextStyle(color: Colors.red),
+                              style: TextStyle(color: AppColors.error),
                             ),
                             const SizedBox(height: 16),
                             ElevatedButton(
@@ -367,424 +470,190 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           ],
                         ),
                       ),
-                    )
-                  else
-                    Expanded(
-                      child: _buildGroupedStudentList(),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
           // Teachers Tab
-          Scaffold(
-            body: RefreshIndicator(
-              onRefresh: () async {
-                await _loadTeachers();
-                setState(() {}); // Trigger rebuild of FutureBuilder
-              },
-              child: FutureBuilder<List<Teacher>>(
-                future: TeacherController().getAllTeachers(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    print(snapshot.error);
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Error: ${snapshot.error}',
-                            style: const TextStyle(color: Colors.red),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {}); // Trigger rebuild
-                            },
-                            child: const Text('Retry'),
-                          ),
-                        ],
+          Container(
+            color: AppColors.scaffoldBackground,
+            child: TeachersTabWidget(),
+          ),
+          // Attendance Tab
+          Container(
+            color: AppColors.scaffoldBackground,
+            child: Scaffold(
+              backgroundColor: AppColors.scaffoldBackground,
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
                       ),
-                    );
-                  }
-
-                  final teachers = snapshot.data ?? [];
-
-                  if (teachers.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.3),
-                                width: 1,
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.school_outlined,
-                              size: 48,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No teachers found',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withOpacity(0.8),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFF328ECC),
-                          Color(0xFF1A4B7C),
-                        ],
+                      child: Icon(
+                        Icons.calendar_today,
+                        color: AppColors.primary,
+                        size: 72,
                       ),
                     ),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: teachers.length,
-                      itemBuilder: (context, index) {
-                        final teacher = teachers[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: ExpansionTile(
-                                  leading: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.3),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      teacher.fname[0].toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    teacher.fullName,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    'Contact: ${teacher.contact}',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
-                                    ),
-                                  ),
-                                  iconColor: Colors.white,
-                                  collapsedIconColor:
-                                      Colors.white.withOpacity(0.8),
-                                  children: [
-                                    if (teacher.classes == null ||
-                                        teacher.classes!.isEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Text(
-                                          'No classes assigned',
-                                          style: TextStyle(
-                                            color:
-                                                Colors.white.withOpacity(0.8),
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Assigned Classes & Subjects:',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white
-                                                    .withOpacity(0.9),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            ...teacher.classes!
-                                                .map((classInfo) => Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                              bottom: 8.0),
-                                                      child: Row(
-                                                        children: [
-                                                          Container(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(8),
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              color: Colors
-                                                                  .white
-                                                                  .withOpacity(
-                                                                      0.2),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          8),
-                                                              border:
-                                                                  Border.all(
-                                                                color: Colors
-                                                                    .white
-                                                                    .withOpacity(
-                                                                        0.3),
-                                                                width: 1,
-                                                              ),
-                                                            ),
-                                                            child: const Icon(
-                                                              Icons.class_,
-                                                              size: 16,
-                                                              color:
-                                                                  Colors.white,
-                                                            ),
-                                                          ),
-                                                          const SizedBox(
-                                                              width: 8),
-                                                          Expanded(
-                                                            child: Text(
-                                                              'Class ${classInfo.className} - ${classInfo.subjectName} (${classInfo.medium})',
-                                                              style: TextStyle(
-                                                                fontSize: 14,
-                                                                color: Colors
-                                                                    .white
-                                                                    .withOpacity(
-                                                                        0.8),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ))
-                                                .toList(),
-                                          ],
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Attendance Management',
+                      style: TextStyle(
+                        color: AppColors.primaryDark,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text(
+                        'Mark and manage student attendance with ease',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    _buildAttendanceActionCard(
+                      context,
+                      icon: Icons.assignment_turned_in,
+                      title: 'Take Attendance',
+                      subtitle: 'Mark daily student attendance',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TakeAttendanceScreen(),
                           ),
                         );
                       },
                     ),
-                  );
-                },
+                    const SizedBox(height: 20),
+                    _buildAttendanceActionCard(
+                      context,
+                      icon: Icons.history,
+                      title: 'View Records',
+                      subtitle: 'Check attendance history and analytics',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const AttendanceRecordsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          // Combined Attendance Tab
-          Scaffold(
-            body: RefreshIndicator(
-              onRefresh: () async {
-                // Refresh attendance data
-                setState(() {
-                  _selectedAttendanceTab = _selectedAttendanceTab;
-                });
-              },
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          spreadRadius: 1,
-                          blurRadius: 3,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.all(4),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _buildAttendanceTabButton(
-                                  title: 'Take Attendance',
-                                  icon: Icons.calendar_today,
-                                  isSelected: _selectedAttendanceTab == 0,
-                                  onTap: () => setState(
-                                      () => _selectedAttendanceTab = 0),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: _buildAttendanceTabButton(
-                                  title: 'History',
-                                  icon: Icons.history,
-                                  isSelected: _selectedAttendanceTab == 1,
-                                  onTap: () => setState(
-                                      () => _selectedAttendanceTab = 1),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: IndexedStack(
-                      index: _selectedAttendanceTab,
-                      children: const [
-                        AttendanceSection(),
-                        AttendanceHistorySection(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // Materials Tab
+          AdminMaterialsScreen(),
+          // Report Tab
+          AdminReportStudentsScreen(),
         ],
       ),
-      floatingActionButton: _selectedIndex < 2
-          ? FloatingActionButton(
-              heroTag:
-                  _selectedIndex == 0 ? 'add_student_fab' : 'add_teacher_fab',
-              onPressed: _selectedIndex == 0
-                  ? _showAddStudentForm
-                  : _showAddTeacherForm,
-              backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add),
-            )
-          : null,
-      bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: AppColors.primaryGradient,
-              ),
-              border: Border(
-                top: BorderSide(
-                  color: AppColors.glassBorder,
-                  width: 1,
-                ),
-              ),
-            ),
-            child: BottomNavigationBar(
-              items: [
-                BottomNavigationBarItem(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.glassBorder,
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(Icons.people),
-                  ),
-                  label: 'Students',
-                ),
-                BottomNavigationBarItem(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.glassBorder,
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(Icons.school),
-                  ),
-                  label: 'Teachers',
-                ),
-                BottomNavigationBarItem(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.glassBackground,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.glassBorder,
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(Icons.calendar_today),
-                  ),
-                  label: 'Attendance',
-                ),
-              ],
-              currentIndex: _selectedIndex,
-              selectedItemColor: Colors.white,
-              unselectedItemColor: Colors.white.withOpacity(0.5),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              type: BottomNavigationBarType.fixed,
-              onTap: _onItemTapped,
-            ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF2A4759), // Your dark blue-gray
+              Color(0xFF1E3440), // Darker blue-gray
+              Color(0xFF152A35), // Even darker for depth
+            ],
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              offset: Offset(0, -2),
+              blurRadius: 8,
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          items: [
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.people),
+              ),
+              label: 'Students',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.school),
+              ),
+              label: 'Teachers',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.calendar_today),
+              ),
+              label: 'Attendance',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.folder),
+              ),
+              label: 'Materials',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.pie_chart_outline),
+              ),
+              label: 'Report',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: Colors.white70,
+          backgroundColor: Colors.transparent,
+          elevation: 4,
+          type: BottomNavigationBarType.fixed,
+          onTap: _onItemTapped,
         ),
       ),
     );
@@ -799,14 +668,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             Icon(
               Icons.school_outlined,
               size: 64,
-              color: Colors.grey[400],
+              color: AppColors.textSecondary,
             ),
             const SizedBox(height: 10),
             Text(
               'No students found',
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.grey[600],
+                color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -824,19 +693,15 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       classGroups.putIfAbsent(classWithMedium, () => []).add(student);
     }
 
-    final classNames = classGroups.keys.toList()..sort();
+    final classNames = classGroups.keys.toList()
+      ..sort((a, b) {
+        final numA = int.tryParse(a.split(' ').first) ?? 0;
+        final numB = int.tryParse(b.split(' ').first) ?? 0;
+        return numA.compareTo(numB);
+      });
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF328ECC),
-            Color(0xFF1A4B7C),
-          ],
-        ),
-      ),
+      color: AppColors.scaffoldBackground,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: classNames.length,
@@ -858,102 +723,132 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: Container(
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white,
+                    Color(0xFFF8F9FA),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.2),
-                  width: 1,
+                  color: AppColors.primary.withOpacity(0.3),
+                  width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: AppColors.primary.withOpacity(0.15),
+                    blurRadius: 15,
+                    offset: const Offset(0, 6),
+                    spreadRadius: 0,
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                    spreadRadius: 0,
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ClassStudentListScreen(
-                              className: className,
-                              students: students,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.class_,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Class $className',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${students.length} Students',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white.withOpacity(0.8),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.arrow_forward_ios,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ],
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ClassStudentListScreen(
+                          className: className,
+                          students: students,
                         ),
                       ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primary,
+                                Color(0xFFE67E22),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                                spreadRadius: 0,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.class_,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Class $className',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${students.length} Students',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.primary,
+                                Color(0xFFE67E22),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                                spreadRadius: 0,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -965,35 +860,126 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  Widget _buildAttendanceTabButton({
-    required String title,
+  Widget _buildAttendanceActionCard(
+    BuildContext context, {
     required IconData icon,
-    required bool isSelected,
+    required String title,
+    required String subtitle,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF328ECC) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Color(0xFFF8F9FA),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.3),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: 0,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+              spreadRadius: 0,
+            ),
+          ],
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? Colors.white : Colors.grey[600],
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary,
+                    Color(0xFFE67E22),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                size: 32,
+                color: Colors.white,
+              ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.white : Colors.grey[600],
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary,
+                    Color(0xFFE67E22),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 16,
               ),
             ),
           ],

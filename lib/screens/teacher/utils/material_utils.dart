@@ -73,6 +73,7 @@ class MaterialUtils {
     required String selectedClass,
     required String selectedBatch,
     required String videoLink,
+    required String videoTitle,
   }) async {
     try {
       final response = await http.post(
@@ -84,6 +85,7 @@ class MaterialUtils {
           'batch': selectedBatch,
           'videoLink': videoLink,
           'category': 'video',
+          'fileName': videoTitle,
         }),
       );
       return response.statusCode == 200;
@@ -92,50 +94,44 @@ class MaterialUtils {
     }
   }
 
-  static Future<File?> downloadPdf(String filePath, String fileName) async {
+  static Future<File?> downloadPdf(String filePath, String fileName,
+      {void Function(double progress)? onProgress}) async {
     try {
-      // Clean up the filePath and construct the URL properly
-      String cleanPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-      // Remove any double slashes
-      cleanPath = cleanPath.replaceAll(RegExp(r'\/+'), '/');
-
-      // Split the path into segments and encode each segment
+      String cleanPath =
+          filePath.startsWith('/') ? filePath.substring(1) : filePath;
+      cleanPath = cleanPath.replaceAll(RegExp(r'/+'), '/');
       final pathSegments = cleanPath.split('/');
-      final encodedSegments = pathSegments
-          .map((segment) => Uri.encodeComponent(segment))
-          .toList();
-
-      // Reconstruct the path with encoded segments
+      final encodedSegments =
+          pathSegments.map((segment) => Uri.encodeComponent(segment)).toList();
       final encodedPath = encodedSegments.join('/');
-      // Use the correct server URL
-      final fullUrl = 'http://27.116.52.24:8076/$encodedPath';
+      final fullUrl =
+          'http://27.116.52.24:8076/uploads/material/$encodedPath';
 
-      final response = await http.get(
-        Uri.parse(fullUrl),
-        headers: {
-          'Accept': '*/*',
-          'Content-Type': '*/*',
-        },
-      );
+      final request = http.Request('POST', Uri.parse(fullUrl));
+      final response = await request.send();
 
       if (response.statusCode == 200) {
-        final bytes = response.bodyBytes;
-        if (bytes.isEmpty) {
-          throw Exception('Downloaded file is empty');
-        }
-
+        final contentLength = response.contentLength ?? 0;
         final tempDir = await getTemporaryDirectory();
         final tempFile = File('${tempDir.path}/$fileName');
+        final sink = tempFile.openWrite();
+        int received = 0;
 
-        await tempFile.writeAsBytes(bytes, flush: true);
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (onProgress != null && contentLength > 0) {
+            onProgress(received / contentLength);
+          }
+        }
+        await sink.close();
 
         if (!await tempFile.exists()) {
           throw Exception('Failed to save file locally');
         }
-
         return tempFile;
       } else {
-        throw Exception('Failed to download file: ${response.statusCode}');
+        throw Exception('Failed to download file: \\${response.statusCode}');
       }
     } catch (e) {
       print('Error downloading PDF: $e');

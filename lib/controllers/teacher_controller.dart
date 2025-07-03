@@ -24,6 +24,8 @@ class TeacherController extends GetxController {
         final List<Teacher> teachers = teachersData
             .map((json) => Teacher.fromJson(json))
             .toList();
+        // sort the teacher list
+        teachers.sort((a, b) => a.fname.toLowerCase().compareTo(b.fname.toLowerCase()));
 
         for (var teacher in teachers) {
           teacher.classes = await getTeacherClasses(teacher.id);

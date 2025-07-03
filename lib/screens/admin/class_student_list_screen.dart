@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:tuition/screens/admin/admin_home_screen.dart';
+import 'package:tuition/screens/admin/widgets/TeachersTabWidget.dart';
+
 import '../../core/themes/app_colors.dart';
 import '../../widgets/custom_bottom_navigation.dart';
 import 'package:tuition/screens/admin/widgets/student_details_sheet.dart';
@@ -55,43 +57,49 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBackground,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: AppColors.primaryGradient,
-          ),
-        ),
+        color: AppColors.scaffoldBackground,
         child: SafeArea(
           child: Column(
             children: [
               // Custom AppBar
               Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF2A4759), // Your dark blue-gray
+                      Color(0xFF1E3440), // Darker blue-gray
+                      Color(0xFF152A35), // Deepest blue-gray
+                    ],
+                  ),
+                ),
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Row(
                   children: [
                     Container(
-                      margin: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.glassBackground,
+                        color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: AppColors.glassBorder,
+                          color: Colors.white.withOpacity(0.3),
                           width: 1,
                         ),
                       ),
                       child: IconButton(
                         icon: const Icon(
-                          Icons.arrow_back,
+                          Icons.arrow_back_ios_new,
                           color: Colors.white,
                           size: 20,
                         ),
                         onPressed: () => Navigator.pop(context),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
-                        splashRadius: 24,
+                        splashRadius: 20,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -103,15 +111,24 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
                             'Class ${widget.className}',
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black26,
+                                  offset: Offset(0, 1),
+                                  blurRadius: 3,
+                                ),
+                              ],
                             ),
                           ),
                           Text(
                             '${widget.students.length} Students',
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withOpacity(0.9),
                               fontSize: 14,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -124,34 +141,42 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
               // Search Bar
               Padding(
                 padding: const EdgeInsets.all(16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackground,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.glassBorder,
-                          width: 1,
-                        ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white,
+                        Color(0xFFF8F9FA),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.15),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                        spreadRadius: 0,
                       ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: _filterStudents,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Search students...',
-                          hintStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.6)),
-                          prefixIcon: Icon(Icons.search,
-                              color: Colors.white.withOpacity(0.6)),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                        ),
-                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _filterStudents,
+                    style: TextStyle(color: AppColors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search students...',
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
+                      prefixIcon:
+                          Icon(Icons.search, color: AppColors.textSecondary),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
                   ),
                 ),
@@ -167,17 +192,28 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
                             Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: AppColors.glassBackground,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: AppColors.glassBorder,
-                                  width: 1,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppColors.primary,
+                                    Color(0xFFE67E22),
+                                  ],
                                 ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primary.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                    spreadRadius: 0,
+                                  ),
+                                ],
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.school_outlined,
                                 size: 48,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white,
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -185,7 +221,7 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
                               'No students found',
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.white.withOpacity(0.8),
+                                color: AppColors.textSecondary,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -200,105 +236,137 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             decoration: BoxDecoration(
-                              color: AppColors.glassBackground,
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white,
+                                  Color(0xFFF8F9FA),
+                                ],
+                              ),
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
-                                color: AppColors.glassBorder,
-                                width: 1,
+                                color: AppColors.primary.withOpacity(0.3),
+                                width: 1.5,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.15),
+                                  blurRadius: 15,
+                                  offset: const Offset(0, 6),
+                                  spreadRadius: 0,
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 5,
+                                  offset: const Offset(0, 2),
+                                  spreadRadius: 0,
+                                ),
+                              ],
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter:
-                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              StudentDetailsSheet(
-                                                  student: student),
-                                        ),
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(12),
-                                            decoration: BoxDecoration(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          StudentDetailsSheet(student: student),
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              AppColors.primary,
+                                              Color(0xFFE67E22),
+                                            ],
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          boxShadow: [
+                                            BoxShadow(
                                               color: AppColors.primary
-                                                  .withOpacity(0.2),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: AppColors.primary
-                                                    .withOpacity(0.3),
-                                                width: 1,
-                                              ),
+                                                  .withOpacity(0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                              spreadRadius: 0,
                                             ),
-                                            child: Text(
-                                              '${index + 1}',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
+                                          ],
+                                        ),
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${student['fname']} ${student['lname']}',
+                                              style: TextStyle(
+                                                color: AppColors.textPrimary,
+                                                fontWeight: FontWeight.w600,
                                                 fontSize: 16,
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  '${student['fname']} ${student['lname']}',
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'ID: ${student['id']}',
-                                                  style: TextStyle(
-                                                    color: Colors.white
-                                                        .withOpacity(0.8),
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primary
-                                                  .withOpacity(0.2),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: AppColors.primary
-                                                    .withOpacity(0.3),
-                                                width: 1,
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'ID: ${student['id']}',
+                                              style: TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 14,
                                               ),
                                             ),
-                                            child: const Icon(
-                                              Icons.arrow_forward_ios,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              AppColors.primary,
+                                              Color(0xFFE67E22),
+                                            ],
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.primary
+                                                  .withOpacity(0.3),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                              spreadRadius: 0,
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          Icons.arrow_forward_ios,
+                                          color: Colors.white,
+                                          size: 16,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -310,11 +378,6 @@ class _ClassStudentListScreenState extends State<ClassStudentListScreen> {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavigation(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: NavigationItems.adminItems,
       ),
     );
   }

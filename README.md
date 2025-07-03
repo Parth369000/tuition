@@ -73,8 +73,10 @@ lib/
   - Role-based access (Admin, Teacher, Student)
 - **Student Management**
   - Registration, attendance, test management, material access
+  - Schedule and view upcoming tests
 - **Teacher Management**
   - Registration, class assignment, material upload, attendance marking
+  - Schedule tests for classes
 - **Admin Dashboard**
   - User management, class management, analytics, and reports
 - **Material Management**

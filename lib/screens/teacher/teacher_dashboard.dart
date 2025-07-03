@@ -3,6 +3,8 @@ import 'package:tuition/core/themes/app_colors.dart';
 import 'class_details_screen.dart';
 import 'teacher_profile_screen.dart';
 import '../login_screen.dart';
+import '../../widgets/liquid_glass_painter.dart';
+import 'package:tuition/services/attendance_service.dart';
 
 class TeacherDashboard extends StatefulWidget {
   final String teacherId;
@@ -25,7 +27,39 @@ class TeacherDashboard extends StatefulWidget {
 }
 
 class _TeacherDashboardState extends State<TeacherDashboard> {
-  void _navigateToClassDetails(String classKey, String subject, String subjectId, String medium) {
+  late List<dynamic> _teacherSubjects;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _teacherSubjects = List.from(widget.teacherSubjects);
+  }
+
+  Future<void> _refreshSubjects() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final subjects = await AttendanceService.getClassesForTeacher(
+        teacherId: int.parse(widget.teacher['id'].toString()),
+      );
+      setState(() {
+        _teacherSubjects = subjects;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to refresh classes: \$e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _navigateToClassDetails(
+      String classKey, String subject, String subjectId, String medium) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -41,33 +75,45 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
+  String getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return parts.take(2).map((e) => e[0].toUpperCase()).join();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: const Text(
-          'Teacher Dashboard',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.surface,
-          ),
-        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: AppColors.primaryGradient,
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF2A4759),
+                Color(0xFF1E3440),
+                Color(0xFF152A35),
+              ],
             ),
           ),
         ),
+        title: const Text(
+          'Teacher Dashboard',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
+        ),
         centerTitle: false,
-        backgroundColor: Colors.transparent,
         actions: [
           IconButton(
-            icon: const Icon(Icons.person, color: AppColors.surface),
+            icon: const Icon(Icons.person, color: Colors.white),
             onPressed: () {
               Navigator.push(
                 context,
@@ -80,20 +126,19 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: AppColors.surface),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () {
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('Logout'),
-                  content: const Text('Are you sure you want to logout?'),
+                  backgroundColor: AppColors.cardBackground,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  title: Text('Logout', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                  content: Text('Are you sure you want to logout?', style: TextStyle(color: AppColors.textPrimary)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
+                      child: Text('Cancel', style: TextStyle(color: AppColors.secondary, fontWeight: FontWeight.w600)),
                     ),
                     TextButton(
                       onPressed: () {
@@ -105,10 +150,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                           (route) => false,
                         );
                       },
-                      child: const Text(
-                        'Logout',
-                        style: TextStyle(color: AppColors.error),
-                      ),
+                      child: Text('Logout', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -117,107 +159,130 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'My Classes',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: widget.teacherSubjects.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No classes assigned',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: widget.teacherSubjects.length,
-                      itemBuilder: (context, index) {
-                        final subjectData = widget.teacherSubjects[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          elevation: 2,
-                          color: AppColors.surface,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: InkWell(
-                            onTap: () => _navigateToClassDetails(
-                              subjectData['class'].toString(),
-                              subjectData['subjectName'],
-                              subjectData['subjectId'].toString(),
-                              subjectData['medium'],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 24,
-                                    backgroundColor: AppColors.primaryLight
-                                        .withOpacity(0.15),
-                                    child: Text(
-                                      subjectData['class'].toString(),
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
+      body: Stack(
+        children: [
+          // Main content
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'My Classes',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.secondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refreshSubjects,
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _teacherSubjects.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No classes assigned',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                itemCount: _teacherSubjects.length,
+                                itemBuilder: (context, index) {
+                                  final subjectData = _teacherSubjects[index];
+                                  final classKey = subjectData['class'] ?? '';
+                                  final className = subjectData['subjectName'] ?? '';
+                                  final medium = subjectData['medium'] ?? '';
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      elevation: 3,
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(18),
+                                        onTap: () => _navigateToClassDetails(
+                                          subjectData['class'].toString(),
+                                          subjectData['subjectName'],
+                                          subjectData['subjectId'].toString(),
+                                          subjectData['medium'],
+                                        ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: AppColors.cardBackground,
+                                            borderRadius: BorderRadius.circular(18),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.06),
+                                                blurRadius: 8,
+                                                offset: Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+                                          child: Row(
+                                            children: [
+                                              CircleAvatar(
+                                                radius: 24,
+                                                backgroundColor: AppColors.secondary,
+                                                child: Text(
+                                                  getInitials(className),
+                                                  style: const TextStyle(
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      subjectData['class'] + 'th ' + className,
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: AppColors.textPrimary,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'Medium: $medium',
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        color: AppColors.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              const Icon(
+                                                Icons.arrow_forward_ios_outlined,
+                                                color: AppColors.secondary,
+                                                size: 28,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          subjectData['subjectName'],
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Class ${subjectData['class']} - ${subjectData['medium']}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.arrow_forward_ios,
-                                    size: 16,
-                                    color: AppColors.iconSecondary,
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'dart:ui';
+import '../core/themes/app_colors.dart';
 
 class LiquidGlassPainter extends CustomPainter {
   final Color waveColor;
@@ -46,5 +48,48 @@ class LiquidGlassPainter extends CustomPainter {
         oldDelegate.waveSpeed != waveSpeed ||
         oldDelegate.waveAmplitude != waveAmplitude ||
         oldDelegate.waveFrequency != waveFrequency;
+  }
+}
+
+class GlassContainer extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final Color? backgroundColor;
+  final BoxBorder? border;
+  final List<BoxShadow>? boxShadow;
+
+  const GlassContainer({
+    Key? key,
+    required this.child,
+    this.borderRadius = 16.0,
+    this.padding,
+    this.backgroundColor,
+    this.border,
+    this.boxShadow,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: padding ?? const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: backgroundColor ?? AppColors.glassBackground,
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: border ??
+                Border.all(
+                  color: AppColors.glassBorder,
+                  width: 1.2,
+                ),
+            boxShadow: boxShadow,
+          ),
+          child: child,
+        ),
+      ),
+    );
   }
 }

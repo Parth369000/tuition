@@ -16,50 +16,54 @@ class CustomBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: AppColors.primaryGradient,
-            ),
-            border: Border(
-              top: BorderSide(
-                color: AppColors.glassBorder,
-                width: 1,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF2A4759), // dark blue-gray
+            Color(0xFF1E3440), // darker blue-gray
+            Color(0xFF152A35), // deepest blue-gray
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            offset: Offset(0, -2),
+            blurRadius: 8,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: BottomNavigationBar(
+        items: List.generate(items.length, (index) {
+          final item = items[index];
+          final bool isActive = index == currentIndex;
+          return BottomNavigationBarItem(
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.secondary.withOpacity(0.18)
+                    : Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                item.icon,
+                color: isActive ? AppColors.primary : Colors.white70,
               ),
             ),
-          ),
-          child: BottomNavigationBar(
-            items: items
-                .map((item) => BottomNavigationBarItem(
-                      icon: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.glassBackground,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.glassBorder,
-                            width: 1,
-                          ),
-                        ),
-                        child: Icon(item.icon),
-                      ),
-                      label: item.label,
-                    ))
-                .toList(),
-            currentIndex: currentIndex,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.white.withOpacity(0.5),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
-            onTap: onTap,
-          ),
-        ),
+            label: item.label,
+          );
+        }),
+        currentIndex: currentIndex,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
+        backgroundColor: Colors.transparent,
+        elevation: 4,
+        type: BottomNavigationBarType.fixed,
+        onTap: onTap,
       ),
     );
   }
@@ -89,6 +93,10 @@ class NavigationItems {
         BottomNavigationItem(
           icon: Icons.calendar_today_outlined,
           label: 'Attendance',
+        ),
+        BottomNavigationItem(
+          icon: Icons.pie_chart_outline,
+          label: 'Report',
         ),
       ];
 

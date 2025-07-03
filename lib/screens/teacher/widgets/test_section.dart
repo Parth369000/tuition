@@ -13,6 +13,7 @@ class TestSection extends StatefulWidget {
   final String selectedClass;
   final String selectedBatch;
   final String subjectId;
+  final String medium;
 
   const TestSection({
     Key? key,
@@ -20,6 +21,7 @@ class TestSection extends StatefulWidget {
     required this.selectedClass,
     required this.selectedBatch,
     required this.subjectId,
+    required this.medium,
   }) : super(key: key);
 
   @override
@@ -37,6 +39,7 @@ class _TestSectionState extends State<TestSection>
   @override
   void initState() {
     super.initState();
+    print(widget.medium);
     _tabController = TabController(length: 2, vsync: this);
     _loadTests();
   }
@@ -127,13 +130,34 @@ class _TestSectionState extends State<TestSection>
       builder: (context) => StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Upload Test'),
+            backgroundColor: AppColors.cardBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              'Upload Test',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // PDF File Selection
                   ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14, horizontal: 18),
+                    ),
                     onPressed: () async {
                       FilePickerResult? result =
                           await FilePicker.platform.pickFiles(
@@ -151,40 +175,80 @@ class _TestSectionState extends State<TestSection>
                   ),
                   if (selectedFile != null)
                     Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        'Selected: ${selectedFile!.path.split('/').last}',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
+                      padding: const EdgeInsets.only(top: 10.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.picture_as_pdf,
+                                color: AppColors.primary, size: 20),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                selectedFile!.path.split('/').last,
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  const SizedBox(height: 16),
-
+                  const SizedBox(height: 18),
                   // Title Input
                   TextField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Test Title',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: AppColors.cardBackground,
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
+                      ),
                     ),
+                    style: TextStyle(color: AppColors.textPrimary),
                     onChanged: (value) => title = value,
                   ),
                   const SizedBox(height: 16),
-
                   // Description Input
                   TextField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Description',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: AppColors.cardBackground,
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
+                      ),
                     ),
+                    style: TextStyle(color: AppColors.textPrimary),
                     maxLines: 3,
                     onChanged: (value) => description = value,
                   ),
                   const SizedBox(height: 16),
-
                   // Time Selection
                   ListTile(
+                    contentPadding: EdgeInsets.zero,
                     title: Text(
                       selectedTime != null
                           ? 'Start Time: ${selectedTime!.format(context)}'
@@ -193,10 +257,12 @@ class _TestSectionState extends State<TestSection>
                         color: selectedTime != null
                             ? AppColors.textPrimary
                             : AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     trailing: IconButton(
-                      icon: const Icon(Icons.access_time),
+                      icon: const Icon(Icons.access_time,
+                          color: AppColors.primary),
                       onPressed: () async {
                         final TimeOfDay? picked = await showTimePicker(
                           context: context,
@@ -205,7 +271,7 @@ class _TestSectionState extends State<TestSection>
                             return Theme(
                               data: Theme.of(context).copyWith(
                                 timePickerTheme: TimePickerThemeData(
-                                  backgroundColor: Colors.white,
+                                  backgroundColor: AppColors.cardBackground,
                                   hourMinuteShape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
                                     side: BorderSide(
@@ -235,13 +301,23 @@ class _TestSectionState extends State<TestSection>
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   // Duration Selection
                   TextField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Duration (minutes)',
-                      border: OutlineInputBorder(),
+                      filled: true,
+                      fillColor: AppColors.cardBackground,
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            BorderSide(color: AppColors.primary, width: 2),
+                      ),
                     ),
+                    style: TextStyle(color: AppColors.textPrimary),
                     keyboardType: TextInputType.number,
                     onChanged: (value) {
                       setState(() {
@@ -252,10 +328,13 @@ class _TestSectionState extends State<TestSection>
                 ],
               ),
             ),
+            actionsPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: Text('Cancel',
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
               ElevatedButton(
                 onPressed: selectedFile == null ||
@@ -298,7 +377,7 @@ class _TestSectionState extends State<TestSection>
                             'teacherId': widget.teacherId.toString(),
                             'subjectId': widget.subjectId,
                             'class': widget.selectedClass,
-                            'medium': widget.selectedBatch,
+                            'medium': widget.medium,
                             'title': title!,
                             'description': description ?? '',
                             'startTime': startTime.toUtc().toIso8601String(),
@@ -319,7 +398,7 @@ class _TestSectionState extends State<TestSection>
                                   SnackBar(
                                     content: Text(data['message'] ??
                                         'Test uploaded successfully'),
-                                    backgroundColor: Colors.green,
+                                    backgroundColor: AppColors.success,
                                   ),
                                 );
                                 _loadTests();
@@ -337,12 +416,21 @@ class _TestSectionState extends State<TestSection>
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('Error: $e'),
-                                backgroundColor: Colors.red,
+                                backgroundColor: AppColors.error,
                               ),
                             );
                           }
                         }
                       },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                ),
                 child: const Text('Upload'),
               ),
             ],
@@ -367,7 +455,7 @@ class _TestSectionState extends State<TestSection>
         "teacherId": widget.teacherId,
         "class": widget.selectedClass,
         "subjectId": int.parse(widget.subjectId),
-        "medium": widget.selectedBatch,
+        "medium": widget.medium,
       });
 
       final streamedResponse = await request.send();
@@ -405,6 +493,7 @@ class _TestSectionState extends State<TestSection>
         selectedClass: widget.selectedClass,
         selectedBatch: widget.selectedBatch,
         subjectId: widget.subjectId,
+        medium: widget.medium,
       ),
     );
   }
@@ -417,21 +506,37 @@ class _TestSectionState extends State<TestSection>
         isAvailable && now.isAfter(startTime) && now.isBefore(endTime);
     final isUpcoming = isAvailable && now.isBefore(startTime);
 
+    // Harmonious color scheme
+    Color statusColor = isActive
+        ? AppColors.success
+        : isUpcoming
+            ? AppColors.primary
+            : AppColors.secondary;
+    Color statusBgColor = isActive
+        ? AppColors.success
+        : isUpcoming
+            ? AppColors.primary
+            : AppColors.secondary;
+    String statusText = isActive
+        ? 'Active'
+        : isUpcoming
+            ? 'Upcoming'
+            : 'Completed';
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.all(10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isActive
-              ? Colors.green
-              : isUpcoming
-                  ? Colors.blue
-                  : Colors.grey,
-          width: 1,
+          color: AppColors.primary.withOpacity(0.10),
+          width: 1.2,
         ),
       ),
+      elevation: 6,
+      color: AppColors.cardBackground,
+      shadowColor: AppColors.primary.withOpacity(0.10),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -440,92 +545,91 @@ class _TestSectionState extends State<TestSection>
                 Expanded(
                   child: Text(
                     test['title'],
-                    style: const TextStyle(
-                      fontSize: 18,
+                    style: TextStyle(
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
-                    color: isActive
-                        ? Colors.green.withOpacity(0.1)
-                        : isUpcoming
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    color: statusBgColor,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    isActive
-                        ? 'Active'
-                        : isUpcoming
-                            ? 'Upcoming'
-                            : 'Completed',
-                    style: TextStyle(
-                      color: isActive
-                          ? Colors.green
-                          : isUpcoming
-                              ? Colors.blue
-                              : Colors.grey,
+                    statusText,
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: 13,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
               test['description'],
               style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
+                color: AppColors.textPrimary,
+                fontSize: 15,
               ),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
+                Icon(Icons.access_time, size: 18, color: AppColors.textPrimary),
+                const SizedBox(width: 8),
                 Text(
                   '${DateFormat('MMM dd, yyyy HH:mm').format(startTime)} - ${DateFormat('MMM dd, yyyy HH:mm').format(endTime)}',
-                  style: const TextStyle(
-                    color: Colors.grey,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontSize: 14,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            if (isActive)
+            const SizedBox(height: 18),
+            if (isAvailable)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () {
                     // TODO: Implement test viewing/downloading
                   },
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Icons.download, color: Colors.white),
                   label: const Text('Download Test'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: AppColors.secondary,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               )
-            else if (!isAvailable)
+            else
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _showAddMarksDialog(test),
-                  icon: const Icon(Icons.grade),
-                  label: const Text('Add Marks'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: AppColors.secondary,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
+                  onPressed: () => _showAddMarksDialog(test),
+                  icon: const Icon(Icons.grade, color: Colors.white),
+                  label: const Text('Add Marks',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ),
           ],
@@ -543,14 +647,14 @@ class _TestSectionState extends State<TestSection>
             Icon(
               Icons.assignment,
               size: 64,
-              color: Colors.grey[400],
+              color: AppColors.scaffoldBackground,
             ),
             const SizedBox(height: 16),
             Text(
               isAvailable ? 'No available tests' : 'No completed tests',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey[600],
+                color: AppColors.scaffoldBackground,
               ),
             ),
           ],
@@ -579,7 +683,7 @@ class _TestSectionState extends State<TestSection>
           children: [
             Text(
               _error!,
-              style: const TextStyle(color: Colors.red),
+              style: const TextStyle(color: AppColors.error),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -593,15 +697,27 @@ class _TestSectionState extends State<TestSection>
     }
 
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBackground,
       body: Column(
         children: [
           Container(
-            color: AppColors.primary,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF2A4759),
+                  Color(0xFF1E3440),
+                  Color(0xFF152A35),
+                ],
+              ),
+            ),
             child: TabBar(
               controller: _tabController,
               labelColor: Colors.white,
               unselectedLabelColor: Colors.white70,
-              indicatorColor: Colors.white,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+              indicatorColor: AppColors.primary,
               tabs: const [
                 Tab(text: 'Available Tests'),
                 Tab(text: 'Completed Tests'),
@@ -612,8 +728,18 @@ class _TestSectionState extends State<TestSection>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildTestList(_availableTests, true),
-                _buildTestList(_completedTests, false),
+                RefreshIndicator(
+                  onRefresh: _loadTests,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.cardBackground,
+                  child: _buildTestList(_availableTests, true),
+                ),
+                RefreshIndicator(
+                  onRefresh: _loadTests,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.cardBackground,
+                  child: _buildTestList(_completedTests, false),
+                ),
               ],
             ),
           ),
@@ -621,9 +747,12 @@ class _TestSectionState extends State<TestSection>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showUploadTestDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Upload Test'),
-        backgroundColor: AppColors.primary,
+        icon: const Icon(Icons.add, color: AppColors.surface),
+        label: const Text('Upload Test',
+            style: TextStyle(
+              color: AppColors.surface,
+            )),
+        backgroundColor: AppColors.secondary,
       ),
     );
   }
@@ -635,6 +764,7 @@ class AddMarksDialog extends StatefulWidget {
   final String selectedClass;
   final String selectedBatch;
   final String subjectId;
+  final String medium;
 
   const AddMarksDialog({
     Key? key,
@@ -643,6 +773,7 @@ class AddMarksDialog extends StatefulWidget {
     required this.selectedClass,
     required this.selectedBatch,
     required this.subjectId,
+    required this.medium,
   }) : super(key: key);
 
   @override
@@ -691,6 +822,8 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
 
   Future<void> _loadStudents() async {
     try {
+      print(
+          'Params: teacherId=${widget.teacherId}, class=${widget.selectedClass}, subjectId=${widget.subjectId}, medium=${widget.medium}');
       final request = http.Request(
         'POST',
         Uri.parse('http://27.116.52.24:8076/getStudentsForTeacher'),
@@ -704,7 +837,7 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
         "teacherId": widget.teacherId,
         "class": widget.selectedClass,
         "subjectId": int.parse(widget.subjectId),
-        "medium": widget.selectedBatch,
+        "medium": widget.medium,
       });
 
       final streamedResponse = await request.send();
@@ -741,7 +874,7 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error fetching students: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -792,7 +925,7 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
               SnackBar(
                 content: Text(
                     data['data']['message'] ?? 'Marks submitted successfully'),
-                backgroundColor: Colors.green,
+                backgroundColor: AppColors.success,
               ),
             );
             Navigator.of(context).pop();
@@ -808,7 +941,7 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error submitting marks: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.error,
           ),
         );
       }
@@ -824,109 +957,148 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Add Marks'),
+      backgroundColor: AppColors.cardBackground,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Padding(
+        padding: const EdgeInsets.only(top: 12.0, bottom: 0),
+        child: Text(
+          'Add Marks',
+          style: TextStyle(
+            color: AppColors.secondary,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
+      ),
       content: SizedBox(
         width: double.maxFinite,
-        height: MediaQuery.of(context).size.height * 0.6,
+        height: MediaQuery.of(context).size.height * 0.65,
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     widget.test['title'],
-                    style: const TextStyle(
-                      fontSize: 16,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
                     ),
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: students.length,
-                      itemBuilder: (context, index) {
-                        final student = students[index];
-                        final studentId = student['id'] as int;
-                        marksControllers.putIfAbsent(
-                          studentId,
-                          () => TextEditingController(
-                            text: existingMarks[studentId]?.toString() ?? '',
-                          ),
-                        );
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor:
-                                      AppColors.primary.withOpacity(0.1),
-                                  child: Text(
-                                    '${index + 1}',
-                                    style: TextStyle(
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                    child: students.isEmpty
+                        ? Center(child: Text('No students found for this test.', style: TextStyle(color: AppColors.textSecondary)))
+                        : ListView.builder(
+                            itemCount: students.length,
+                            itemBuilder: (context, index) {
+                              final student = students[index];
+                              final studentId = student['id'] as int;
+                              marksControllers.putIfAbsent(
+                                studentId,
+                                () => TextEditingController(
+                                  text: existingMarks[studentId]?.toString() ?? '',
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                              );
+                              return Card(
+                                color: AppColors.surface,
+                                elevation: 2,
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14.0),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        '${student['fname']} ${student['lname']}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      TextField(
-                                        controller: marksControllers[studentId],
-                                        decoration: const InputDecoration(
-                                          labelText: 'Marks',
-                                          border: OutlineInputBorder(),
-                                          contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
+                                      CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: AppColors.secondary,
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                        keyboardType: TextInputType.number,
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${student['fname']} ${student['lname']}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: AppColors.textPrimary,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: marksControllers[studentId],
+                                              decoration: InputDecoration(
+                                                prefixIcon: Icon(Icons.grade, color: AppColors.secondary),
+                                                labelText: 'Marks',
+                                                labelStyle: TextStyle(color: AppColors.textSecondary),
+                                                filled: true,
+                                                fillColor: AppColors.cardBackground,
+                                                border: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                              ),
+                                              style: TextStyle(color: AppColors.textPrimary),
+                                              keyboardType: TextInputType.number,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
                 ],
               ),
       ),
       actions: [
-        TextButton(
-          onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: isSubmitting ? null : _submitMarks,
-          child: isSubmitting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text('Submit Marks'),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
+                child: Text('Cancel', style: TextStyle(color: AppColors.secondary)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isSubmitting ? null : _submitMarks,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 2,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Text('Submit Marks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+          ],
         ),
       ],
     );

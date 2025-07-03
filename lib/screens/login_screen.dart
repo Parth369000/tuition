@@ -6,11 +6,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:tuition/widgets/liquid_glass_painter.dart';
-import 'teacher/teacher_home_screen.dart';
 import 'student/student_home_screen.dart';
 import 'admin/admin_home_screen.dart';
 import '../core/themes/app_colors.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -29,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen>
   late AnimationController _waveController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen>
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat(reverse: true,count: 1);
+    )..repeat(reverse: true, count: 1);
 
     _fadeAnimation = Tween<double>(
       begin: 0.0,
@@ -71,6 +71,18 @@ class _LoginScreenState extends State<LoginScreen>
       _error = null;
     });
 
+    void showError(String message) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      });
+    }
+
     try {
       var headers = {'Content-Type': 'application/json'};
       var request =
@@ -101,6 +113,21 @@ class _LoginScreenState extends State<LoginScreen>
             final user = data['user'];
             final role = user['role'];
             final token = data['token'];
+
+            // Save login info to SharedPreferences
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('token', token);
+            await prefs.setString('role', role);
+            await prefs.setString('user', json.encode(user));
+            if (role == 'student') {
+              await prefs.setString('student', json.encode(data['student']));
+              await prefs.setString('enrolledSubjects',
+                  json.encode(data['enrolledSubjects'] ?? []));
+            } else if (role == 'teacher') {
+              await prefs.setString('teacher', json.encode(data['teacher']));
+              await prefs.setString(
+                  'teacherSubjects', json.encode(data['teacherSubjects']));
+            }
 
             switch (role) {
               case 'admin':
@@ -150,30 +177,32 @@ class _LoginScreenState extends State<LoginScreen>
             }
           }
         } else {
-          setState(() {
-            _error = data['message'] ?? 'Login failed';
-          });
+          final msg = (data['message'] == 'Invalid credentials')
+              ? 'Invalid phone number or password. Please try again.'
+              : (data['message'] ?? 'Login failed');
+          showError(msg);
         }
       } else {
-        setState(() {
-          _error = 'Server error: ${response.reasonPhrase}';
-        });
+        // Try to parse error message from response body
+        try {
+          final data = json.decode(responseBody);
+          final msg = (data['message'] == 'Invalid credentials')
+              ? 'Invalid phone number or password. Please try again.'
+              : (data['message'] ?? 'Server error: ${response.reasonPhrase}');
+          showError(msg);
+        } catch (e) {
+          showError('Server error: ${response.reasonPhrase}');
+        }
       }
     } on TimeoutException {
-      setState(() {
-        _error =
-            'Connection timed out. Please check your internet connection and try again.';
-      });
+      showError(
+          'Connection timed out. Please check your internet connection and try again.');
     } on SocketException {
-      setState(() {
-        _error =
-            'Unable to connect to the server. Please check your internet connection.';
-      });
+      showError(
+          'Unable to connect to the server. Please check your internet connection.');
     } catch (e) {
-      setState(() {
-        print('Login error: $e');
-        _error = 'An error occurred. Please try again.';
-      });
+      print('Login error: $e');
+      showError('An error occurred. Please try again.');
     } finally {
       setState(() {
         _isLoading = false;
@@ -183,225 +212,256 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
+    final double logoSize = 70;
     return Scaffold(
       body: Stack(
         children: [
-          // Animated background with waves
-          AnimatedBuilder(
-            animation: _waveController,
-            builder: (context, child) {
+          // Animated vibrant gradient background
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(seconds: 2),
+            curve: Curves.easeInOutCubic,
+            builder: (context, value, child) {
               return Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.primary.withOpacity(0.8),
-                      AppColors.primary.withOpacity(0.6),
-                      // AppColors.primary.withOpacity(0.4),
+                      Color.lerp(AppColors.primary, AppColors.secondary, value)!,
+                      Color.lerp(AppColors.primaryLight, AppColors.secondary, value)!,
                     ],
                   ),
-                ),
-                child: CustomPaint(
-                  painter: LiquidGlassPainter(
-                    waveColor: Colors.white.withOpacity(0.1),
-                    waveSpeed: 0.5,
-                    waveAmplitude: 0.1,
-                    waveFrequency: 1.0,
-                    time: _waveController.value * 2,
-                  ),
-                  size: Size.infinite,
                 ),
               );
             },
           ),
-          // Login form with glass effect
+          // Animated login card
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SlideTransition(
-                      position: _slideAnimation,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                          child: Container(
-                            padding: const EdgeInsets.all(24.0),
-                            // color: const Color(0xFF00B4D8).withOpacity(0.35), // Liquid-like blue
-                            // borderRadius: BorderRadius.circular(16),
-                            // border: Border.all(
-                            //   color: const Color(0xFF48CAE4).withOpacity(0.4), // Lighter liquid border
-                            //   width: 1.5,
-                            // ),
-                            decoration: BoxDecoration(
-                              color: Colors.transparent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.transparent.withOpacity(0.2),
-                                width: 1.5,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.transparent.withOpacity(0.1),
-                                  blurRadius: 5,
-                                  spreadRadius: 2,
-                                ),
-                              ],
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.9, end: 1.0),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutBack,
+                    builder: (context, scale, child) => Transform.scale(
+                      scale: scale,
+                      child: child,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 32),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.10),
+                            blurRadius: 18,
+                            spreadRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Animated glowing logo
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.7, end: 1.0),
+                              duration: const Duration(seconds: 2),
+                              curve: Curves.easeInOutCubic,
+                              builder: (context, glow, child) {
+                                return Container(
+                                  width: logoSize + 14,
+                                  height: logoSize + 14,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primary.withOpacity(0.22 * glow),
+                                        blurRadius: 24 * glow,
+                                        spreadRadius: 4 * glow,
+                                      ),
+                                      BoxShadow(
+                                        color: AppColors.secondary.withOpacity(0.13 * glow),
+                                        blurRadius: 16 * glow,
+                                        spreadRadius: 2 * glow,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          AppColors.primary.withOpacity(0.18),
+                                          AppColors.secondary.withOpacity(0.13),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Icon(
+                                        Icons.school,
+                                        size: logoSize,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Logo or App Name
-                                  const Icon(
-                                    Icons.school,
-                                    size: 64,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Welcome Back',
-                                    style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 32),
-
-                                  // Phone Number Field
-                                  TextFormField(
-                                    controller: _phoneController,
-                                    keyboardType: TextInputType.phone,
-                                    style: const TextStyle(color: Colors.white),
-                                    decoration: InputDecoration(
-                                      labelText: 'Phone Number',
-                                      labelStyle: const TextStyle(
-                                          color: Colors.white70),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white70),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white70),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white),
-                                      ),
-                                      prefixIcon: const Icon(Icons.phone,
-                                          color: Colors.white70),
-                                      filled: true,
-                                      fillColor: Colors.white.withOpacity(0.1),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your phone number';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 16),
-
-                                  // Password Field
-                                  TextFormField(
-                                    controller: _passwordController,
-                                    style: const TextStyle(color: Colors.white),
-                                    decoration: InputDecoration(
-                                      labelText: 'Password',
-                                      labelStyle: const TextStyle(
-                                          color: Colors.white70),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white70),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white70),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        borderSide: const BorderSide(
-                                            color: Colors.white),
-                                      ),
-                                      prefixIcon: const Icon(Icons.lock,
-                                          color: Colors.white70),
-                                      filled: true,
-                                      fillColor: Colors.white.withOpacity(0.1),
-                                    ),
-                                    obscureText: true,
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Please enter your password';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // Error Message
-                                  if (_error != null)
-                                    Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 16),
-                                      child: Text(
-                                        _error!,
-                                        style: const TextStyle(
-                                          color: Colors.red,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-
-                                  // Login Button
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 50,
-                                    child: ElevatedButton(
-                                      onPressed: _isLoading ? null : _login,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            Colors.white.withOpacity(0.2),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      child: _isLoading
-                                          ? const SizedBox(
-                                              width: 24,
-                                              height: 24,
-                                              child: CircularProgressIndicator(
-                                                color: Colors.white,
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Text(
-                                              'Login',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                    ),
+                            const SizedBox(height: 18),
+                            // App name
+                            Text(
+                              'Tuition App',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryDark,
+                                letterSpacing: 1.2,
+                                fontFamily: 'Montserrat',
+                                shadows: [
+                                  Shadow(
+                                    color: AppColors.primary.withOpacity(0.10),
+                                    blurRadius: 6,
                                   ),
                                 ],
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 6),
+                            // Tagline
+                            Text(
+                              'Login to continue your learning',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 28),
+                            // Phone Number Field
+                            TextFormField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              style: TextStyle(color: AppColors.textPrimary),
+                              decoration: InputDecoration(
+                                labelText: 'Phone Number',
+                                labelStyle: TextStyle(color: AppColors.textSecondary),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary),
+                                ),
+                                prefixIcon: Icon(Icons.phone, color: AppColors.primary),
+                                filled: true,
+                                fillColor: AppColors.cardBackground,
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your phone number';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            // Password Field
+                            TextFormField(
+                              controller: _passwordController,
+                              style: TextStyle(color: AppColors.textPrimary),
+                              decoration: InputDecoration(
+                                labelText: 'Password',
+                                labelStyle: TextStyle(color: AppColors.textSecondary),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary.withOpacity(0.3)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: AppColors.primary),
+                                ),
+                                prefixIcon: Icon(Icons.lock, color: AppColors.primary),
+                                filled: true,
+                                fillColor: AppColors.cardBackground,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: AppColors.primary,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                              ),
+                              obscureText: _obscurePassword,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter your password';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            // Login Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _login,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _isLoading
+                                      ? AppColors.primary.withOpacity(0.5)
+                                      : AppColors.primary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                  padding: EdgeInsets.zero,
+                                ),
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 350),
+                                  child: _isLoading
+                                      ? SizedBox(
+                                          width: 28,
+                                          height: 28,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 3.5,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Login',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

@@ -117,11 +117,12 @@ class AttendanceUtils {
     required String selectedClass,
     required String subjectId,
     required Map<int, bool> attendanceMap,
+    DateTime? date,
   }) async {
     try {
       final results = <Map<String, dynamic>>[];
       final errors = <String>[];
-      final today = DateTime.now().toString().split(' ')[0];
+      final attendanceDate = (date ?? DateTime.now()).toString().split(' ')[0];
 
       // Mark attendance for each student
       for (var entry in attendanceMap.entries) {
@@ -130,7 +131,7 @@ class AttendanceUtils {
             teacherId: teacherId,
             studentId: entry.key,
             status: entry.value ? "present" : "absent",
-            date: today,
+            date: attendanceDate,
             subjectId: int.parse(subjectId),
           );
           results.add(result['data']);

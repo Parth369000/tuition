@@ -13,12 +13,17 @@ class TeacherProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBackground,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: AppColors.primaryGradient,
+            colors: [
+              Color(0xFF2A4759),
+              Color(0xFF1E3440),
+              Color(0xFF152A35),
+            ],
           ),
         ),
         child: SafeArea(
@@ -32,12 +37,8 @@ class TeacherProfileScreen extends StatelessWidget {
                     Container(
                       margin: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.glassBackground,
+                        color: AppColors.secondary.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.glassBorder,
-                          width: 1,
-                        ),
                       ),
                       child: IconButton(
                         icon: const Icon(
@@ -74,19 +75,22 @@ class TeacherProfileScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
-                                color: AppColors.glassBackground,
-                                borderRadius: BorderRadius.circular(100),
-                                border: Border.all(
-                                  color: AppColors.glassBorder,
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.person,
-                                size: 50,
                                 color: Colors.white,
+                                borderRadius: BorderRadius.circular(100),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.secondary.withOpacity(0.10),
+                                    blurRadius: 16,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                size: 54,
+                                color: AppColors.secondary,
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -96,27 +100,31 @@ class TeacherProfileScreen extends StatelessWidget {
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                                letterSpacing: 0.5,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
+                                horizontal: 14,
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.glassBackground,
+                                color: AppColors.secondary,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: AppColors.glassBorder,
-                                  width: 1,
-                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.secondary.withOpacity(0.18),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: const Text(
                                 'Teacher',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -126,12 +134,12 @@ class TeacherProfileScreen extends StatelessWidget {
                       const SizedBox(height: 32),
 
                       // Profile Details
-                      const Text(
+                      Text(
                         'Profile Details',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppColors.scaffoldBackground,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -155,12 +163,12 @@ class TeacherProfileScreen extends StatelessWidget {
                       const SizedBox(height: 24),
 
                       // Account Information
-                      const Text(
+                      Text(
                         'Account Information',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppColors.scaffoldBackground,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -188,25 +196,24 @@ class TeacherProfileScreen extends StatelessWidget {
   }
 
   Widget _buildDetailCard(List<Widget> children) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.glassBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.glassBorder,
-              width: 1,
-            ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.secondary.withOpacity(0.13), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.secondary.withOpacity(0.06),
+            blurRadius: 8,
+            offset: Offset(0, 4),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: children,
-            ),
-          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: children,
         ),
       ),
     );
@@ -224,16 +231,12 @@ class TeacherProfileScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.glassBackground,
+              color: AppColors.secondary.withOpacity(0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.glassBorder,
-                width: 1,
-              ),
             ),
             child: Icon(
               icon,
-              color: Colors.white,
+              color: AppColors.secondary,
               size: 24,
             ),
           ),
@@ -246,7 +249,8 @@ class TeacherProfileScreen extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.8),
+                    color: AppColors.secondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -254,8 +258,8 @@ class TeacherProfileScreen extends StatelessWidget {
                   value,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
