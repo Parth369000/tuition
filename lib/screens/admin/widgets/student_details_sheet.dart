@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:tuition/screens/admin/admin_home_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tuition/core/themes/app_colors.dart';
-import 'package:tuition/widgets/custom_bottom_navigation.dart';
 
 class StudentDetailsSheet extends StatelessWidget {
   final dynamic student;
@@ -76,6 +79,29 @@ class StudentDetailsSheet extends StatelessWidget {
                             blurRadius: 3,
                           ),
                         ],
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                        onPressed: () => _confirmAndDelete(context),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        splashRadius: 20,
                       ),
                     ),
                   ],
@@ -178,7 +204,9 @@ class StudentDetailsSheet extends StatelessWidget {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(16),
                                   child: student['imageUrl'] != null &&
-                                          student['imageUrl'].toString().isNotEmpty
+                                          student['imageUrl']
+                                              .toString()
+                                              .isNotEmpty
                                       ? Image.network(
                                           student['imageUrl'],
                                           width: 64,
@@ -392,6 +420,204 @@ class StudentDetailsSheet extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmAndDelete(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Delete student?'),
+          content: const Text('This will permanently delete this student.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    // Loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    String? errorMessage;
+    try {
+      // Try to include token if available
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final dynamic rawId = student['id'];
+      final int? id =
+          rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+
+      // 1) Load StudentSubject rows and print matches for this studentId
+      try {
+        final getDataResp = await http
+            .post(
+              Uri.parse('http://27.116.52.24:8076/getData'),
+              headers: headers,
+              body: jsonEncode({'table': 'StudentSubject'}),
+            )
+            .timeout(const Duration(seconds: 25));
+
+        if (getDataResp.statusCode == 200) {
+          try {
+            final gd = jsonDecode(getDataResp.body);
+            if (gd is Map && gd['errorStatus'] == false) {
+              final List<dynamic> all = (gd['data'] as List?) ?? <dynamic>[];
+              final int? targetId =
+                  id ?? int.tryParse(student['id']?.toString() ?? '');
+              final matches = all.where((e) {
+                final sidRaw = (e as Map)['studentId'];
+                final sid = sidRaw is int
+                    ? sidRaw
+                    : int.tryParse(sidRaw?.toString() ?? '');
+                return targetId != null && sid == targetId;
+              }).toList();
+              print(
+                  'StudentSubject matches for studentId ${targetId ?? student['id']}: ');
+              print(matches);
+
+              // 2) Delete each StudentSubject row for this student
+              for (final item in matches) {
+                try {
+                  final map = Map<String, dynamic>.from(item as Map);
+                  final dynamic rowIdRaw = map['id'];
+                  final int? rowId = rowIdRaw is int
+                      ? rowIdRaw
+                      : int.tryParse(rowIdRaw?.toString() ?? '');
+                  if (rowId == null) continue;
+
+                  final delBody = jsonEncode({
+                    'table': 'StudentSubject',
+                    'id': rowId,
+                  });
+
+                  final delResp = await http
+                      .post(
+                        Uri.parse('http://27.116.52.24:8076/deleteData'),
+                        headers: headers,
+                        body: delBody,
+                      )
+                      .timeout(const Duration(seconds: 20));
+
+                  if (delResp.statusCode == 200) {
+                    try {
+                      final delData = jsonDecode(delResp.body);
+                      if (delData is Map && delData['errorStatus'] == true) {
+                        print(
+                            'Failed to delete StudentSubject id=$rowId: ${delResp.body}');
+                      } else {
+                        print('Deleted StudentSubject id=$rowId');
+                      }
+                    } catch (_) {
+                      final lower = delResp.body.toLowerCase();
+                      if (!lower.contains('success')) {
+                        print(
+                            'Unexpected delete StudentSubject response for id=$rowId: ${delResp.body}');
+                      } else {
+                        print('Deleted StudentSubject id=$rowId');
+                      }
+                    }
+                  } else {
+                    print(
+                        'HTTP ${delResp.statusCode} deleting StudentSubject id=$rowId: ${delResp.reasonPhrase}');
+                  }
+                } catch (e) {
+                  print('Error deleting StudentSubject row: $e');
+                }
+              }
+            } else {
+              print(
+                  'getData StudentSubject error or unexpected format: ${getDataResp.body}');
+            }
+          } catch (e) {
+            print(
+                'Error parsing StudentSubject getData response: $e | ${getDataResp.body}');
+          }
+        } else {
+          print(
+              'Failed to load StudentSubject (code ${getDataResp.statusCode}): ${getDataResp.reasonPhrase}');
+        }
+      } catch (e) {
+        print('Network error while loading StudentSubject: $e');
+      }
+
+      // 3) Delete the Student row itself
+      final body = jsonEncode({
+        'table': 'Student',
+        'id': id ?? student['id'],
+      });
+      final response = await http
+          .post(
+            Uri.parse('http://27.116.52.24:8076/deleteData'),
+            headers: headers,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 20));
+
+      Navigator.of(context).pop(); // close loader
+
+      if (response.statusCode == 200) {
+        try {
+          final data = jsonDecode(response.body);
+          final bool failed = (data is Map &&
+              ((data['errorStatus'] == true) || (data['success'] == false)));
+          if (!failed) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
+              (route) => false,
+            );
+            return;
+          }
+          print('Delete failed by server. ${data.toString()}');
+          errorMessage = (data is Map && data['message'] != null)
+              ? data['message'].toString()
+              : 'Delete failed by server.';
+        } catch (_) {
+          // If body is not JSON, assume success only if server explicitly returns keyword
+          final lower = response.body.toLowerCase();
+          if (lower.contains('success')) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
+              (route) => false,
+            );
+            return;
+          }
+          errorMessage = 'Unexpected response: ${response.body}';
+        }
+      } else {
+        errorMessage =
+            'Failed to delete (code ${response.statusCode}). ${response.reasonPhrase ?? ''}';
+      }
+    } catch (e) {
+      Navigator.of(context).pop(); // close loader
+      errorMessage = 'Error: $e';
+    }
+
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    }
   }
 
   Widget _buildInfoSection(String title, IconData icon, List<Widget> children) {
