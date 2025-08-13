@@ -30,6 +30,8 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
   bool _liked = false;
   bool _disliked = false;
 
+  bool _isInFullscreen = false; // Only updated by controller listener
+
   @override
   void initState() {
     super.initState();
@@ -54,19 +56,17 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
         initialVideoId: videoId,
         flags: const YoutubePlayerFlags(
           autoPlay: true,
-          mute: true, // Start muted
+          mute: false, // Set initial state to unmuted
           enableCaption: true,
           forceHD: true,
-          // Security flags to prevent external access
           hideControls: false,
-          // Hide YouTube branding and annotations
           hideThumbnail: true,
         ),
       );
 
       setState(() {
         _isPlayerReady = true;
-        _isMuted = true; // Set initial state to muted
+        _isMuted = false;
       });
 
       // Add listener to track player state and fullscreen changes
@@ -75,6 +75,12 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
       _controller.addListener(() {
         setState(() {
           _isPlaying = _controller.value.isPlaying;
+        });
+      });
+      // Add listener to track fullscreen changes
+      _controller.addListener(() {
+        setState(() {
+          _isInFullscreen = _controller.value.isFullScreen;
         });
       });
     } catch (e) {
@@ -331,18 +337,18 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
         },
       ),
       builder: (context, player) {
+        // If in fullscreen, show only the player
+        if (_isInFullscreen) {
+          return Scaffold(
+            body: Center(child: player),
+            backgroundColor: Colors.black,
+          );
+        }
+        // Not in fullscreen: show player with rest of UI
         return Scaffold(
           appBar: AppBar(
             title: Text(widget.title),
             backgroundColor: const Color(0xFF328ECC),
-            // Remove share action to prevent URL exposure
-            // actions: [
-            //   IconButton(
-            //     icon: const Icon(Icons.share),
-            //     onPressed: _shareVideo,
-            //     tooltip: 'Share',
-            //   ),
-            // ],
           ),
           body: Center(
             child: _error != null
@@ -368,108 +374,67 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
                 : SingleChildScrollView(
                     child: Column(
                       children: [
-                        // Video player with overlay protection
-                        Container(
-                          height: MediaQuery.of(context).size.height * 0.4,
-                          child: Stack(
-                            children: [
-                              SizedBox(
-                                width: double.infinity,
-                                height: double.infinity,
-                                child: player,
-                              ),
-                              // Add overlay to prevent interaction with YouTube elements only on the player
-                              Positioned.fill(
-                                child: GestureDetector(
-                                  onLongPress: () {
-                                    // Prevent long press context menu on video
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Copying is disabled for security reasons'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  },
-                                  onSecondaryTap: () {
-                                    // Prevent right-click context menu on video
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Right-click is disabled for security reasons'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  },
-                                  child: Container(
-                                    color: Colors.transparent,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        // Video player (not fixed height)
+                        player,
                         // Controls and info below the player
-                        if (!_controller.value.isFullScreen) ...[
-                          // Video progress slider
-                          if (_isPlayerReady &&
-                              _controller.metadata.duration.inSeconds > 0) ...[
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0, vertical: 8.0),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        _formatDuration(
-                                            _controller.value.position),
-                                        style: const TextStyle(
-                                            fontSize: 12, color: Colors.grey),
-                                      ),
-                                      Expanded(
-                                        child: Slider(
-                                          value: _controller
-                                              .value.position.inSeconds
-                                              .toDouble()
-                                              .clamp(
-                                                  0,
-                                                  _controller.metadata.duration
-                                                      .inSeconds
-                                                      .toDouble()),
-                                          min: 0.0,
-                                          max: _controller
-                                              .metadata.duration.inSeconds
-                                              .toDouble(),
-                                          onChanged: (value) {
-                                            _controller.seekTo(Duration(
-                                                seconds: value.toInt()));
-                                          },
-                                        ),
-                                      ),
-                                      Text(
-                                        _formatDuration(
-                                            _controller.metadata.duration),
-                                        style: const TextStyle(
-                                            fontSize: 12, color: Colors.grey),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        // Video progress slider
+                        if (_isPlayerReady &&
+                            _controller.metadata.duration.inSeconds > 0) ...[
                           Padding(
-                            padding: const EdgeInsets.all(16.0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0, vertical: 8.0),
                             child: Column(
                               children: [
-                                _buildControls(),
-                                const SizedBox(height: 16),
-                                _buildVideoInfo(),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _formatDuration(
+                                          _controller.value.position),
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.grey),
+                                    ),
+                                    Expanded(
+                                      child: Slider(
+                                        value: _controller
+                                            .value.position.inSeconds
+                                            .toDouble()
+                                            .clamp(
+                                                0,
+                                                _controller.metadata.duration
+                                                    .inSeconds
+                                                    .toDouble()),
+                                        min: 0.0,
+                                        max: _controller
+                                            .metadata.duration.inSeconds
+                                            .toDouble(),
+                                        onChanged: (value) {
+                                          _controller.seekTo(Duration(
+                                              seconds: value.toInt()));
+                                        },
+                                      ),
+                                    ),
+                                    Text(
+                                      _formatDuration(
+                                          _controller.metadata.duration),
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.grey),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
                         ],
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              _buildControls(),
+                              const SizedBox(height: 16),
+                              _buildVideoInfo(),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),

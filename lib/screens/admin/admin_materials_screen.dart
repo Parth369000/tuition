@@ -10,7 +10,10 @@ import 'package:tuition/widgets/liquid_glass_painter.dart';
 import 'package:tuition/screens/teacher/youtube_player_screen.dart';
 import 'package:tuition/screens/teacher/pdf_viewer_screen.dart';
 import 'package:tuition/screens/teacher/utils/file_download_utils.dart';
+import 'package:tuition/screens/teacher/utils/material_utils.dart';
 import 'package:path/path.dart' as path;
+import 'package:tuition/models/subject.dart';
+import 'package:tuition/controllers/subject_controller.dart';
 
 class AdminMaterialsScreen extends StatefulWidget {
   const AdminMaterialsScreen({Key? key}) : super(key: key);
@@ -21,16 +24,8 @@ class AdminMaterialsScreen extends StatefulWidget {
 
 class _AdminMaterialsScreenState extends State<AdminMaterialsScreen>
     with SingleTickerProviderStateMixin {
-  final List<Map<String, String>> _classBatchCombos = [
-    {'class': '7', 'batch': 'English'},
-    {'class': '7', 'batch': 'Gujarati'},
-    {'class': '8', 'batch': 'English'},
-    {'class': '8', 'batch': 'Gujarati'},
-    {'class': '9', 'batch': 'English'},
-    {'class': '9', 'batch': 'Gujarati'},
-    {'class': '10', 'batch': 'English'},
-    {'class': '10', 'batch': 'Gujarati'},
-  ];
+  // Show only unique classes
+  final List<String> _classes = ['7', '8', '9', '10'];
 
   @override
   void initState() {
@@ -91,14 +86,8 @@ class _AdminMaterialsScreenState extends State<AdminMaterialsScreen>
         },
       );
       try {
-        // Ensure filePath is a full URL
-        String fileUrl = filePath;
-        if (!fileUrl.startsWith('http')) {
-          fileUrl =
-              'http://27.116.52.24:8076/uploads/material${fileUrl.startsWith('/') ? fileUrl.substring(1) : fileUrl}';
-        }
-        final downloadedFile = await FileDownloadUtils.downloadFile(
-          fileUrl,
+        final downloadedFile = await MaterialUtils.downloadMaterial(
+          filePath,
           fileName,
           onProgress: (p) {
             progress = p;
@@ -259,18 +248,16 @@ class _AdminMaterialsScreenState extends State<AdminMaterialsScreen>
               mainAxisSpacing: 16,
               childAspectRatio: 1.4,
             ),
-            itemCount: _classBatchCombos.length,
+            itemCount: _classes.length,
             itemBuilder: (context, idx) {
-              final combo = _classBatchCombos[idx];
-              final label = '${combo['class']} ${combo['batch']}';
+              final className = _classes[idx];
               return GestureDetector(
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => MaterialListScreen(
-                        className: combo['class']!,
-                        batch: combo['batch']!,
+                        className: className,
                         onViewMaterial: _onViewMaterial,
                         onUploadMaterial: _onUploadMaterial,
                       ),
@@ -309,7 +296,7 @@ class _AdminMaterialsScreenState extends State<AdminMaterialsScreen>
                       ),
                       Center(
                         child: Text(
-                          label,
+                          className,
                           style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w900,
@@ -333,13 +320,11 @@ class _AdminMaterialsScreenState extends State<AdminMaterialsScreen>
 
 class MaterialListScreen extends StatefulWidget {
   final String className;
-  final String batch;
   final Function(Map<String, dynamic>) onViewMaterial;
 
   const MaterialListScreen({
     Key? key,
     required this.className,
-    required this.batch,
     required this.onViewMaterial,
     required void Function() onUploadMaterial,
   }) : super(key: key);
@@ -352,32 +337,50 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
   List<MaterialModel> materials = [];
   bool _isLoading = true;
   String? _error;
+  Map<String, List<Map<String, dynamic>>> groupedByBatch = {};
+  Map<int, String> subjectIdToName = {};
+  bool _isSubjectsLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchMaterials();
+    _fetchSubjectsAndMaterials();
   }
 
-  Future<void> _fetchMaterials() async {
+  Future<void> _fetchSubjectsAndMaterials() async {
     setState(() {
       _isLoading = true;
+      _isSubjectsLoading = true;
       _error = null;
     });
     try {
+      // Fetch subjects
+      final subjects = await SubjectController().getSubjects();
+      subjectIdToName = {for (var s in subjects) s.id: s.name};
+      _isSubjectsLoading = false;
+      // Fetch materials
       final result = await ApiService().getMaterials(
         teacherId: 2,
         className: widget.className,
-        batch: widget.batch,
       );
+      materials = result;
+      // Group materials by batch
+      groupedByBatch = {};
+      for (final m in materials) {
+        final batch = m.batch ?? '';
+        if (batch.isNotEmpty) {
+          groupedByBatch.putIfAbsent(batch, () => []);
+          groupedByBatch[batch]!.add(m.toMap());
+        }
+      }
       setState(() {
-        materials = result;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
         _error = 'Failed to load materials: $e';
         _isLoading = false;
+        _isSubjectsLoading = false;
       });
     }
   }
@@ -387,7 +390,14 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     String videoLink = '';
     String fileName = '';
     String selectedType = 'file';
-    showModalBottomSheet(
+    Subject? selectedSubject;
+    List<Subject> subjects = [];
+    bool isLoadingSubjects = true;
+    String? subjectError;
+    String? selectedMedium;
+    final List<String> mediums = ['English', 'Gujarati'];
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -399,6 +409,20 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
           padding: MediaQuery.of(context).viewInsets,
           child: StatefulBuilder(
             builder: (context, setModalState) {
+              // Fetch subjects on first build
+              if (isLoadingSubjects) {
+                SubjectController().getSubjects().then((list) {
+                  setModalState(() {
+                    subjects = list;
+                    isLoadingSubjects = false;
+                  });
+                }).catchError((e) {
+                  setModalState(() {
+                    subjectError = e.toString();
+                    isLoadingSubjects = false;
+                  });
+                });
+              }
               return SingleChildScrollView(
                 child: Container(
                   decoration: BoxDecoration(
@@ -459,6 +483,62 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Medium Dropdown
+                            DropdownButtonFormField<String>(
+                              value: selectedMedium,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: 'Select Medium',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              items: mediums.map((medium) {
+                                return DropdownMenuItem<String>(
+                                  value: medium,
+                                  child: Text(medium),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                setModalState(() {
+                                  selectedMedium = val;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 18),
+                            // Subject Dropdown
+                            isLoadingSubjects
+                                ? const Center(
+                                    child: CircularProgressIndicator())
+                                : subjectError != null
+                                    ? Text(
+                                        'Failed to load subjects: ' +
+                                            subjectError!,
+                                        style:
+                                            const TextStyle(color: Colors.red))
+                                    : DropdownButtonFormField<Subject>(
+                                        value: selectedSubject,
+                                        isExpanded: true,
+                                        decoration: InputDecoration(
+                                          labelText: 'Select Subject',
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                        items: subjects.map((subject) {
+                                          return DropdownMenuItem<Subject>(
+                                            value: subject,
+                                            child: Text(subject.name),
+                                          );
+                                        }).toList(),
+                                        onChanged: (val) {
+                                          setModalState(() {
+                                            selectedSubject = val;
+                                          });
+                                        },
+                                      ),
+                            const SizedBox(height: 18),
                             TextField(
                               decoration: InputDecoration(
                                 labelText: 'Title',
@@ -508,6 +588,15 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                                                   const SnackBar(
                                                       content: Text(
                                                           'Please enter a title.')),
+                                                );
+                                                return;
+                                              }
+                                              if (selectedMedium == null) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  const SnackBar(
+                                                      content: Text(
+                                                          'Please select a medium.')),
                                                 );
                                                 return;
                                               }
@@ -654,10 +743,31 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                                       );
                                       return;
                                     }
+                                    if (selectedMedium == null) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Please select a medium.')),
+                                      );
+                                      return;
+                                    }
+                                    if (selectedSubject == null) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Please select a subject.')),
+                                      );
+                                      return;
+                                    }
                                     if (videoLink.trim().isNotEmpty) {
                                       Navigator.pop(context);
                                       await _uploadVideo(
-                                          videoLink.trim(), fileName);
+                                          videoLink.trim(),
+                                          fileName,
+                                          selectedSubject,
+                                          selectedMedium);
                                     }
                                   },
                                 ),
@@ -679,8 +789,27 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
                                   ),
                                   child: const Text('Upload PDF/Image'),
                                   onPressed: () async {
+                                    if (selectedMedium == null) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Please select a medium.')),
+                                      );
+                                      return;
+                                    }
+                                    if (selectedSubject == null) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Please select a subject.')),
+                                      );
+                                      return;
+                                    }
                                     Navigator.pop(context);
-                                    _uploadFile(ufile, fileName);
+                                    _uploadFile(ufile, fileName,
+                                        selectedSubject, selectedMedium);
                                   },
                                 ),
                               ),
@@ -698,19 +827,22 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     );
   }
 
-  Future<void> _uploadFile(File file, String fileName) async {
+  Future<void> _uploadFile(
+      File file, String fileName, Subject? subject, String? medium) async {
+    if (subject == null || medium == null) return;
     try {
+      final batch = "$medium-${subject.id}";
       final uploaded = await ApiService().uploadMaterialFile(
         teacherId: 2,
         className: widget.className,
-        batch: widget.batch,
+        batch: batch,
         file: file,
         fileName: fileName,
       );
       if (uploaded != null) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Material uploaded successfully')));
-        _fetchMaterials();
+        _fetchSubjectsAndMaterials(); // Refresh materials and subjects
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to upload material')));
@@ -721,19 +853,22 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
     }
   }
 
-  Future<void> _uploadVideo(String videoLink, String fileName) async {
+  Future<void> _uploadVideo(String videoLink, String fileName, Subject? subject,
+      String? medium) async {
+    if (subject == null || medium == null) return;
     try {
+      final batch = "$medium-${subject.id}";
       final uploaded = await ApiService().shareVideoLink(
         teacherId: 2,
         className: widget.className,
-        batch: widget.batch,
+        batch: batch,
         videoLink: videoLink,
         fileName: fileName,
       );
       if (uploaded != null) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Video shared successfully')));
-        _fetchMaterials();
+        _fetchSubjectsAndMaterials(); // Refresh materials and subjects
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to share video')));
@@ -757,7 +892,7 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         ),
         centerTitle: true,
         title: Text(
-          'Materials: ${widget.className} ${widget.batch}',
+          'Materials: ${widget.className}',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -790,19 +925,113 @@ class _MaterialListScreenState extends State<MaterialListScreen> {
         ),
       ),
       backgroundColor: AppColors.scaffoldBackground,
-      body: _isLoading
+      body: _isLoading || _isSubjectsLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
                   child:
                       Text(_error!, style: const TextStyle(color: Colors.red)))
-              : materials.isEmpty
+              : groupedByBatch.isEmpty
                   ? const Center(child: Text('No Materials available'))
-                  : MaterialsSection(
-                      materials: materials.map((m) => m.toMap()).toList(),
-                      onViewMaterial: widget.onViewMaterial,
-                      onUploadMaterial: _onUploadMaterial,
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: groupedByBatch.entries.map((batchEntry) {
+                        final batch = batchEntry.key;
+                        final mats = batchEntry.value;
+                        // Parse medium and subjectId
+                        final parts = batch.split('-');
+                        String batchDisplay = batch;
+                        if (parts.length == 2) {
+                          final medium = parts[0];
+                          final subjectId = int.tryParse(parts[1]);
+                          final subjectName = subjectIdToName[subjectId] ??
+                              'Subject $subjectId';
+                          batchDisplay = '$medium - $subjectName';
+                        }
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 24),
+                          elevation: 5,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: ListTile(
+                            leading:
+                                Icon(Icons.label, color: AppColors.primary),
+                            title: Text(
+                              batchDisplay,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            subtitle: Text(
+                                '${mats.length} file${mats.length == 1 ? '' : 's'}'),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => BatchMaterialsScreen(
+                                    batchName: batchDisplay,
+                                    materials: mats,
+                                    onViewMaterial: widget.onViewMaterial,
+                                    onUploadMaterial: _onUploadMaterial,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }).toList(),
                     ),
+    );
+  }
+}
+
+class BatchMaterialsScreen extends StatelessWidget {
+  final String batchName;
+  final List<Map<String, dynamic>> materials;
+  final Function(Map<String, dynamic>) onViewMaterial;
+  final VoidCallback onUploadMaterial;
+
+  const BatchMaterialsScreen({
+    Key? key,
+    required this.batchName,
+    required this.materials,
+    required this.onViewMaterial,
+    required this.onUploadMaterial,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(batchName),
+        backgroundColor: Colors.transparent,
+        elevation: 4,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2A4759),
+                Color(0xFF1E3440),
+                Color(0xFF152A35),
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+        ),
+      ),
+      backgroundColor: AppColors.scaffoldBackground,
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: MaterialsSection(
+          materials: materials,
+          onViewMaterial: onViewMaterial,
+          onUploadMaterial: onUploadMaterial,
+        ),
+      ),
     );
   }
 }

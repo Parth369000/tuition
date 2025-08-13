@@ -65,7 +65,6 @@ class _TeachersTabWidgetState extends State<TeachersTabWidget> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -77,148 +76,147 @@ class _TeachersTabWidgetState extends State<TeachersTabWidget> {
           await _loadTeachers();
           setState(() {});
         },
-        child: FutureBuilder<List<Teacher>>(
-          future: TeacherController().getAllTeachers(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Container(
-                color: AppColors.scaffoldBackground,
-                // decoration: const BoxDecoration(
-                //   gradient: LinearGradient(
-                //     begin: Alignment.topLeft,
-                //     end: Alignment.bottomRight,
-                //     colors: [
-                //       Color(0xFF328ECC),
-                //       Color(0xFF1A4B7C),
-                //     ],
-                //   ),
-                // ),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
+        child: Column(
+          children: [
+            // Header with total count and Add Teacher button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.people,
+                      color: AppColors.primaryDark, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Total Teachers: ',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                ),
-              );
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Error: ${snapshot.error}',
-                      style: const TextStyle(color: AppColors.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {},
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
-            final teachers = snapshot.data ?? [];
-            if (teachers.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.glassBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: AppColors.glassBorder,
-                          width: 1,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.school_outlined,
-                        size: 48,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'No teachers found',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.people,
-                          color: AppColors.primaryDark, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Total Teachers: ',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      Text(
-                        teachers.length.toString(),
+                  FutureBuilder<List<Teacher>>(
+                    future: TeacherController().getAllTeachers(),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data?.length ?? 0;
+                      return Text(
+                        count.toString(),
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                             color: AppColors.primary),
+                      );
+                    },
+                  ),
+                  const Spacer(),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.3),
+                        width: 1,
                       ),
-                      const Spacer(),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: AppColors.primary.withOpacity(0.3),
-                            width: 1,
+                    ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.add,
+                              color: AppColors.secondary, size: 20),
+                          tooltip: 'Add Teacher',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const TeacherForm(),
+                              ),
+                            ).then((_) => setState(() {}));
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Text(
+                            'Add Teacher',
+                            style: TextStyle(
+                              color: AppColors.secondary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.add,
-                                  color: AppColors.secondary, size: 20),
-                              tooltip: 'Add Teacher',
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const TeacherForm(),
-                                  ),
-                                ).then((_) => setState(() {}));
-                              },
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Text('Add Teacher',
-                              style: TextStyle(
-                                color: AppColors.secondary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              ),
-                            ),
-                          ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Teachers list
+            Expanded(
+              child: FutureBuilder<List<Teacher>>(
+                future: TeacherController().getAllTeachers(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Container(
+                      color: AppColors.scaffoldBackground,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryLight),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Error: ${snapshot.error}',
+                            style: const TextStyle(color: AppColors.error),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () {},
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  final teachers = snapshot.data ?? [];
+                  if (teachers.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.glassBackground,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.glassBorder,
+                                width: 1,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.school_outlined,
+                              size: 48,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No teachers found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: teachers.length,
                     itemBuilder: (context, index) {
@@ -405,11 +403,11 @@ class _TeachersTabWidgetState extends State<TeachersTabWidget> {
                         ),
                       );
                     },
-                  ),
-                ),
-              ],
-            );
-          },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

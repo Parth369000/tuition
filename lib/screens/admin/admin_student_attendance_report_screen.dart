@@ -104,17 +104,21 @@ class _AdminStudentAttendanceReportScreenState
     return result;
   }
 
+  // Use themed colors for present/absent if available, else fallback
+  Color get presentColor => AppColors.success ?? Colors.green;
+  Color get absentColor => AppColors.error ?? Colors.red;
+
   List<PieChartSectionData> _buildPieSections(Map<String, int> subjectData) {
     final total = (subjectData['present'] ?? 0) + (subjectData['absent'] ?? 0);
     if (total == 0) return [];
     return [
       PieChartSectionData(
-        color: Colors.green,
+        color: presentColor,
         value: (subjectData['present'] ?? 0).toDouble(),
         radius: 45,
       ),
       PieChartSectionData(
-        color: Colors.red,
+        color: absentColor,
         value: (subjectData['absent'] ?? 0).toDouble(),
         radius: 40,
       ),
@@ -125,13 +129,19 @@ class _AdminStudentAttendanceReportScreenState
   Widget build(BuildContext context) {
     final grouped = _groupAttendanceBySubject();
     return Scaffold(
+      backgroundColor: AppColors.scaffoldBackground,
       appBar: AppBar(
-        title: Text(
+        backgroundColor: AppColors.primary,
+        title: const Text(
           'Attendance Report',
           style: TextStyle(
-            fontSize: 17,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
           ),
         ),
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
       ),
       body: _isLoading
           ? const Center(
@@ -140,7 +150,15 @@ class _AdminStudentAttendanceReportScreenState
               valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
             ))
           : _error != null
-              ? Center(child: Text(_error!))
+              ? Center(
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: AppColors.primaryDark,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
               : grouped.isEmpty
                   ? const Center(child: Text('No attendance data.'))
                   : Container(
@@ -154,6 +172,7 @@ class _AdminStudentAttendanceReportScreenState
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18)),
                             margin: const EdgeInsets.only(bottom: 22),
+                            shadowColor: AppColors.primary.withOpacity(0.15),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -198,7 +217,7 @@ class _AdminStudentAttendanceReportScreenState
                                         alignment: Alignment.center,
                                         child: Text(
                                           (widget.fname != null &&
-                                                  widget.fname!.isNotEmpty)
+                                              widget.fname!.isNotEmpty)
                                               ? widget.fname![0].toUpperCase()
                                               : '',
                                           style: const TextStyle(
@@ -285,8 +304,10 @@ class _AdminStudentAttendanceReportScreenState
                                                   color: AppColors.primaryDark),
                                               const SizedBox(width: 6),
                                               Text('Contact: ${widget.contact}',
-                                                  style: const TextStyle(
-                                                      fontSize: 15)),
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    color: AppColors.textPrimary,
+                                                  )),
                                             ],
                                           ),
                                         ),
@@ -303,8 +324,10 @@ class _AdminStudentAttendanceReportScreenState
                                               const SizedBox(width: 6),
                                               Text(
                                                   'Parent: ${widget.parentContact}',
-                                                  style: const TextStyle(
-                                                      fontSize: 15)),
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    color: AppColors.textPrimary,
+                                                  )),
                                             ],
                                           ),
                                         ),
@@ -320,8 +343,10 @@ class _AdminStudentAttendanceReportScreenState
                                                   color: AppColors.primaryDark),
                                               const SizedBox(width: 6),
                                               Text('Birthdate: ${widget.bdate}',
-                                                  style: const TextStyle(
-                                                      fontSize: 15)),
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    color: AppColors.textPrimary,
+                                                  )),
                                             ],
                                           ),
                                         ),
@@ -337,8 +362,10 @@ class _AdminStudentAttendanceReportScreenState
                                                   color: AppColors.primaryDark),
                                               const SizedBox(width: 6),
                                               Text('School: ${widget.school}',
-                                                  style: const TextStyle(
-                                                      fontSize: 15)),
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    color: AppColors.textPrimary,
+                                                  )),
                                             ],
                                           ),
                                         ),
@@ -360,6 +387,7 @@ class _AdminStudentAttendanceReportScreenState
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16)),
                               margin: const EdgeInsets.only(bottom: 16),
+                              shadowColor: AppColors.primary.withOpacity(0.10),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -398,8 +426,7 @@ class _AdminStudentAttendanceReportScreenState
                                               height: 90,
                                               child: PieChart(
                                                 PieChartData(
-                                                  sections:
-                                                      _buildPieSections(data),
+                                                  sections: _buildPieSections(data),
                                                   centerSpaceRadius: 8,
                                                   sectionsSpace: 3,
                                                 ),
@@ -416,8 +443,7 @@ class _AdminStudentAttendanceReportScreenState
                                                 Row(
                                                   children: [
                                                     const Icon(Icons.book,
-                                                        color: AppColors
-                                                            .primaryDark,
+                                                        color: AppColors.primaryDark,
                                                         size: 18),
                                                     const SizedBox(width: 8),
                                                     Expanded(
@@ -425,11 +451,9 @@ class _AdminStudentAttendanceReportScreenState
                                                         subject,
                                                         style: const TextStyle(
                                                             fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .bold),
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: AppColors.textPrimary),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                   ],
@@ -438,30 +462,22 @@ class _AdminStudentAttendanceReportScreenState
                                                 Text(
                                                   'Present: $present / $total',
                                                   style: TextStyle(
-                                                    color:
-                                                        AppColors.primaryDark,
+                                                    color: AppColors.primaryDark,
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 14,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 8),
                                                 Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.start,
+                                                  mainAxisAlignment: MainAxisAlignment.start,
                                                   children: [
-                                                    _LegendDot(
-                                                        color: Colors.green),
+                                                    _LegendDot(color: presentColor),
                                                     const SizedBox(width: 4),
-                                                    const Text('Present',
-                                                        style: TextStyle(
-                                                            fontSize: 12)),
+                                                    Text('Present', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                                                     const SizedBox(width: 12),
-                                                    _LegendDot(
-                                                        color: Colors.red),
+                                                    _LegendDot(color: absentColor),
                                                     const SizedBox(width: 4),
-                                                    const Text('Absent',
-                                                        style: TextStyle(
-                                                            fontSize: 12)),
+                                                    Text('Absent', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                                                   ],
                                                 ),
                                               ],
@@ -507,7 +523,7 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Chip(
       avatar: Icon(icon, size: 18, color: AppColors.primaryDark),
-      label: Text(label, style: const TextStyle(fontSize: 14)),
+      label: Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
       backgroundColor: AppColors.cardBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

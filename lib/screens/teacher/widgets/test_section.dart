@@ -7,6 +7,10 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:tuition/core/themes/app_colors.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_pdfview/flutter_pdfview.dart';
+import '../../../screens/teacher/utils/material_utils.dart';
 
 class TestSection extends StatefulWidget {
   final int teacherId;
@@ -82,21 +86,31 @@ class _TestSectionState extends State<TestSection>
 
         if (availableData['errorStatus'] == false &&
             completedData['errorStatus'] == false) {
-          // Filter available tests
-          final availableTests =
+          final now = DateTime.now();
+          final allTests =
               List<Map<String, dynamic>>.from(availableData['data'] ?? []);
-          final filteredAvailableTests = availableTests.where((test) {
-            return test['class'] == widget.selectedClass &&
+          final completedTestsRaw =
+              List<Map<String, dynamic>>.from(completedData['data'] ?? []);
+
+          final filteredAvailableTests = allTests.where((test) {
+            final matchesClass = test['class'] == widget.selectedClass &&
                 test['subjectId'].toString() == widget.subjectId;
+            final endTime = DateTime.parse(test['endTime']);
+            return matchesClass && now.isBefore(endTime);
           }).toList();
 
-          // Filter completed tests
-          final completedTests =
-              List<Map<String, dynamic>>.from(completedData['data'] ?? []);
-          final filteredCompletedTests = completedTests.where((test) {
-            return test['class'] == widget.selectedClass &&
-                test['subjectId'].toString() == widget.subjectId;
-          }).toList();
+          final filteredCompletedTests = [
+            ...allTests.where((test) {
+              final matchesClass = test['class'] == widget.selectedClass &&
+                  test['subjectId'].toString() == widget.subjectId;
+              final endTime = DateTime.parse(test['endTime']);
+              return matchesClass && !now.isBefore(endTime);
+            }),
+            ...completedTestsRaw.where((test) {
+              return test['class'] == widget.selectedClass &&
+                  test['subjectId'].toString() == widget.subjectId;
+            }),
+          ];
 
           setState(() {
             _availableTests = filteredAvailableTests;
@@ -597,8 +611,101 @@ class _TestSectionState extends State<TestSection>
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: Implement test viewing/downloading
+                  onPressed: () async {
+                    final now = DateTime.now();
+                    final startTime = DateTime.parse(test['startTime']);
+                    if (now.isBefore(startTime)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('This test will be available at '
+                              '${DateFormat('MMM dd, yyyy HH:mm').format(startTime)}'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                      return;
+                    }
+                    // Download and view PDF functionality
+                    double progress = 0.0;
+                    final fileName = test['title'] != null
+                        ? '${test['title']}.pdf'
+                        : 'test.pdf';
+                    String progressMessage = 'Downloading test PDF...';
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) {
+                        return StatefulBuilder(
+                          builder: (context, setState) {
+                            return AlertDialog(
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(progressMessage),
+                                  const SizedBox(height: 20),
+                                  LinearProgressIndicator(value: progress),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                      '${(progress * 100).toStringAsFixed(0)}%'),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                    try {
+                      // Use MaterialUtils.downloadMaterial for the question paper
+                      final filePath = test['questionPaperPath'] ?? '';
+                      debugPrint('Teacher test filePath: $filePath');
+                      debugPrint(
+                          'Teacher test Download URL:  {MaterialUtils.getFullFileUrl(filePath)}');
+                      final downloadedFile =
+                          await MaterialUtils.downloadMaterial(
+                        filePath,
+                        fileName,
+                        onProgress: (p) {
+                          progress = p;
+                          if (Navigator.of(context).canPop()) {
+                            (context as Element).markNeedsBuild();
+                          }
+                        },
+                      );
+                      Navigator.of(context).pop(); // Close progress dialog
+                      if (downloadedFile == null ||
+                          !await downloadedFile.exists()) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text('File not found after download!')),
+                        );
+                        return;
+                      }
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(
+                              title: Text(fileName),
+                              backgroundColor: AppColors.primary,
+                            ),
+                            body: PDFView(
+                              filePath: downloadedFile.path,
+                              enableSwipe: true,
+                              swipeHorizontal: false,
+                              autoSpacing: true,
+                              pageFling: true,
+                              pageSnap: true,
+                              fitPolicy: FitPolicy.BOTH,
+                              preventLinkNavigation: false,
+                            ),
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      Navigator.of(context)
+                          .pop(); // Close progress dialog if error
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.download, color: Colors.white),
                   label: const Text('Download Test'),
@@ -989,7 +1096,10 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                   const SizedBox(height: 16),
                   Expanded(
                     child: students.isEmpty
-                        ? Center(child: Text('No students found for this test.', style: TextStyle(color: AppColors.textSecondary)))
+                        ? Center(
+                            child: Text('No students found for this test.',
+                                style:
+                                    TextStyle(color: AppColors.textSecondary)))
                         : ListView.builder(
                             itemCount: students.length,
                             itemBuilder: (context, index) {
@@ -998,7 +1108,8 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                               marksControllers.putIfAbsent(
                                 studentId,
                                 () => TextEditingController(
-                                  text: existingMarks[studentId]?.toString() ?? '',
+                                  text: existingMarks[studentId]?.toString() ??
+                                      '',
                                 ),
                               );
                               return Card(
@@ -1026,7 +1137,8 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                                       const SizedBox(width: 14),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               '${student['fname']} ${student['lname']}',
@@ -1038,20 +1150,31 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                                             ),
                                             const SizedBox(height: 8),
                                             TextField(
-                                              controller: marksControllers[studentId],
+                                              controller:
+                                                  marksControllers[studentId],
                                               decoration: InputDecoration(
-                                                prefixIcon: Icon(Icons.grade, color: AppColors.secondary),
+                                                prefixIcon: Icon(Icons.grade,
+                                                    color: AppColors.secondary),
                                                 labelText: 'Marks',
-                                                labelStyle: TextStyle(color: AppColors.textSecondary),
+                                                labelStyle: TextStyle(
+                                                    color: AppColors
+                                                        .textSecondary),
                                                 filled: true,
-                                                fillColor: AppColors.cardBackground,
+                                                fillColor:
+                                                    AppColors.cardBackground,
                                                 border: OutlineInputBorder(
-                                                  borderRadius: BorderRadius.circular(12),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
                                                 ),
-                                                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                                                contentPadding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12,
+                                                        horizontal: 12),
                                               ),
-                                              style: TextStyle(color: AppColors.textPrimary),
-                                              keyboardType: TextInputType.number,
+                                              style: TextStyle(
+                                                  color: AppColors.textPrimary),
+                                              keyboardType:
+                                                  TextInputType.number,
                                             ),
                                           ],
                                         ),
@@ -1071,8 +1194,10 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
           children: [
             Expanded(
               child: TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(context).pop(),
-                child: Text('Cancel', style: TextStyle(color: AppColors.secondary)),
+                onPressed:
+                    isSubmitting ? null : () => Navigator.of(context).pop(),
+                child: Text('Cancel',
+                    style: TextStyle(color: AppColors.secondary)),
               ),
             ),
             const SizedBox(width: 8),
@@ -1082,7 +1207,8 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 2,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -1092,10 +1218,13 @@ class _AddMarksDialogState extends State<AddMarksDialog> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : const Text('Submit Marks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    : const Text('Submit Marks',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
               ),
             ),
           ],

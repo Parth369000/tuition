@@ -18,9 +18,9 @@ class AppColors {
   static const Color background = Color(0xFFEEEEEE); // Very Light Gray
 
   // Navigation Colors
-  static const Color navBackground = Color(0xFFDDDDDD); // Light Gray
-  static const Color navSelected = Color(0xFFF79B72); // Orange/Coral
-  static const Color navUnselected = Color(0xFF2A4759); // Dark Blue-Gray
+    static const Color navBackground = Color(0xFFDDDDDD); // Light Gray
+    static const Color navSelected = Color(0xFFF79B72); // Orange/Coral
+    static const Color navUnselected = Color(0xFF2A4759); // Dark Blue-Gray
 
   // Text Colors
   static const Color textPrimary = Color(0xFF2A4759); // Dark Blue-Gray

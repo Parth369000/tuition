@@ -61,7 +61,6 @@ class ApiService {
   Future<List<MaterialModel>> getMaterials({
     required int teacherId,
     required String className,
-    required String batch,
   }) async {
     try {
       var headers = {'Content-Type': 'application/json'};
@@ -70,7 +69,6 @@ class ApiService {
       request.body = json.encode({
         'teacherId': teacherId,
         'class': className,
-        'batch': batch,
       });
       request.headers.addAll(headers);
       http.StreamedResponse response = await request.send();
@@ -78,6 +76,7 @@ class ApiService {
         final respStr = await response.stream.bytesToString();
         final data = json.decode(respStr);
         if (data['data'] is List) {
+          print(data['data']);
           return (data['data'] as List)
               .map((item) => MaterialModel.fromJson(item))
               .toList();
@@ -129,8 +128,8 @@ class ApiService {
       'teacherId': teacherId,
       'class': className,
       'batch': batch,
-      'videoLink': videoLink,
       'fileName': fileName,
+      'videoLink': videoLink,
     });
     request.headers.addAll(headers);
     http.StreamedResponse response = await request.send();

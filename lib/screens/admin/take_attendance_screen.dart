@@ -36,14 +36,36 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
   // Add a flag to control showing filters and find button
   bool showStudentListOnly = false;
 
+  // Flag to ensure filter dialog is only shown once
+  bool _filterDialogShown = false;
+
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    if (teachers.isNotEmpty) {
+      // Teachers already loaded, show dialog immediately
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_filterDialogShown && mounted) {
+          _filterDialogShown = true;
+          _showFilterDialog();
+        }
+      });
+    } else {
+      _loadInitialData();
+    }
   }
 
   Future<void> _loadInitialData() async {
     await _loadTeachers();
+    // Always open the filter dialog after teachers are loaded, only once
+    if (!_filterDialogShown && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_filterDialogShown && mounted) {
+          _filterDialogShown = true;
+          _showFilterDialog();
+        }
+      });
+    }
   }
 
   Future<void> _loadTeachers() async {
@@ -757,9 +779,7 @@ class _TakeAttendanceScreenState extends State<TakeAttendanceScreen> {
     final bool isDisabled = isSubmitting || attendanceTaken;
     final bool isSuccess = attendanceTaken;
     List<Color> gradientColors = isDisabled
-        ? [
-            AppColors.success, AppColors.success.withOpacity(0.7)
-          ]
+        ? [AppColors.success, AppColors.success.withOpacity(0.7)]
         : (isSuccess
             ? [AppColors.success, AppColors.success.withOpacity(0.7)]
             : [AppColors.primary, Color(0xFFE67E22)]);

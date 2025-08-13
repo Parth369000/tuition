@@ -7,10 +7,21 @@ import 'package:flutter/foundation.dart';
 
 class MaterialUtils {
   static String getFullFileUrl(String filePath) {
-    if (filePath.startsWith('http')) {
-      return filePath;
+    // Remove leading slash if present
+    String cleanPath =
+        filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    cleanPath = cleanPath.replaceAll(RegExp(r'/+'), '/');
+    final pathSegments = cleanPath.split('/');
+    final encodedSegments =
+        pathSegments.map((segment) => Uri.encodeComponent(segment)).toList();
+    final encodedPath = encodedSegments.join('/');
+
+    // Only prepend 'uploads/material/' if not already present
+    if (cleanPath.startsWith('uploads/material/')) {
+      return 'http://27.116.52.24:8076/$encodedPath';
+    } else {
+      return 'http://27.116.52.24:8076/uploads/material/$encodedPath';
     }
-    return 'http://27.116.52.24:8076/${filePath.startsWith('/') ? filePath.substring(1) : filePath}';
   }
 
   static Future<List<Map<String, dynamic>>> fetchMaterials({
@@ -43,11 +54,12 @@ class MaterialUtils {
     }
   }
 
-  static Future<bool> uploadPdf({
+  static Future<bool> uploadMaterial({
     required int teacherId,
     required String selectedClass,
     required String selectedBatch,
     required File file,
+    String category = 'file', // 'file' for PDF, 'image' for images
   }) async {
     try {
       var request = http.MultipartRequest(
@@ -57,7 +69,7 @@ class MaterialUtils {
       request.fields['teacherId'] = teacherId.toString();
       request.fields['class'] = selectedClass;
       request.fields['batch'] = selectedBatch;
-      request.fields['category'] = 'file';
+      request.fields['category'] = category;
       request.files.add(
         await http.MultipartFile.fromPath('file', file.path),
       );
@@ -94,27 +106,20 @@ class MaterialUtils {
     }
   }
 
-  static Future<File?> downloadPdf(String filePath, String fileName,
+  static Future<File?> downloadMaterial(String filePath, String fileName,
       {void Function(double progress)? onProgress}) async {
+    File? tempFile;
+    IOSink? sink;
     try {
-      String cleanPath =
-          filePath.startsWith('/') ? filePath.substring(1) : filePath;
-      cleanPath = cleanPath.replaceAll(RegExp(r'/+'), '/');
-      final pathSegments = cleanPath.split('/');
-      final encodedSegments =
-          pathSegments.map((segment) => Uri.encodeComponent(segment)).toList();
-      final encodedPath = encodedSegments.join('/');
-      final fullUrl =
-          'http://27.116.52.24:8076/uploads/material/$encodedPath';
-
-      final request = http.Request('POST', Uri.parse(fullUrl));
+      final fullUrl = getFullFileUrl(filePath);
+      final request = http.Request('GET', Uri.parse(fullUrl));
       final response = await request.send();
 
       if (response.statusCode == 200) {
         final contentLength = response.contentLength ?? 0;
         final tempDir = await getTemporaryDirectory();
-        final tempFile = File('${tempDir.path}/$fileName');
-        final sink = tempFile.openWrite();
+        tempFile = File('${tempDir.path}/$fileName');
+        sink = tempFile.openWrite();
         int received = 0;
 
         await for (final chunk in response.stream) {
@@ -125,17 +130,24 @@ class MaterialUtils {
           }
         }
         await sink.close();
+        sink = null;
 
         if (!await tempFile.exists()) {
-          throw Exception('Failed to save file locally');
+          debugPrint('Failed to save file locally');
+          return null;
         }
         return tempFile;
       } else {
-        throw Exception('Failed to download file: \\${response.statusCode}');
+        debugPrint('Failed to download file: HTTP ${response.statusCode}');
+        return null;
       }
-    } catch (e) {
-      print('Error downloading PDF: $e');
-      rethrow;
+    } catch (e, stack) {
+      debugPrint('Error downloading material: $e\n$stack');
+      return null;
+    } finally {
+      if (sink != null) {
+        await sink.close();
+      }
     }
   }
 }

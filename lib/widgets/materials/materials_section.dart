@@ -18,6 +18,7 @@ class MaterialsSection extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -42,7 +43,7 @@ class MaterialsSection extends StatelessWidget {
           const SizedBox(height: 16),
           materials.isEmpty
               ? _buildEmptyState()
-              : Expanded(child: _buildMaterialsList()),
+              : _buildMaterialsList(),
         ],
       ),
     );
@@ -81,6 +82,8 @@ class MaterialsSection extends StatelessWidget {
 
   Widget _buildMaterialsList() {
     return ListView.builder(
+      shrinkWrap: true,
+      physics: NeverScrollableScrollPhysics(),
       itemCount: materials.length,
       itemBuilder: (context, index) {
         final material = materials[index];

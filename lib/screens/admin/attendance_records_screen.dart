@@ -38,6 +38,9 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   // New filter dialog control
   bool showSummaryHeader = true;
 
+  // Flag to ensure filter dialog is only shown once
+  bool _filterDialogShown = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +52,13 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     startDate = DateTime(now.year, now.month, 1);
     endDate = now;
     await _loadTeachers();
+    // Open filter dialog after teachers are loaded, only once
+    if (!_filterDialogShown && mounted) {
+      _filterDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showFilterDialog();
+      });
+    }
   }
 
   Future<void> _loadTeachers() async {
@@ -136,11 +146,15 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
     });
 
     try {
+      print("className: ${selectedClassData!['class']}");
+      print("subjectId: ${selectedClassData!['subjectId']},");
+      print("medium: ${selectedClassData!['medium']},");
+
       final records = await AttendanceService.getAttendanceRecords(
         teacherId: selectedTeacher!.id,
         className: selectedClassData!['class'],
         subjectId: selectedClassData!['subjectId'],
-        medium: '',
+        medium: selectedClassData!['medium'],
         startDate: DateFormat('yyyy-MM-dd').format(startDate!),
         endDate: DateFormat('yyyy-MM-dd').format(endDate!),
       );
@@ -293,6 +307,13 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
   }
 
   void _showFilterDialog() async {
+    // Ensure teachers are loaded before showing the dialog
+    if (teachers.isEmpty && !isLoadingTeachers) {
+      setState(() => isLoadingTeachers = true);
+      await _loadTeachers();
+      setState(() => isLoadingTeachers = false);
+    }
+
     await showDialog(
       context: context,
       builder: (context) {
@@ -300,145 +321,172 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           backgroundColor: AppColors.cardBackground,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Gradient header
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF2A4759),
-                      Color(0xFF1E3440),
-                      Color(0xFF152A35),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.filter_list, color: Colors.white, size: 22),
-                    SizedBox(width: 10),
-                    Text(
-                      'Filter Options',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Gradient header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 18, horizontal: 16),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color(0xFF2A4759),
+                          Color(0xFF1E3440),
+                          Color(0xFF152A35),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildDateRangeCard(),
-                      const SizedBox(height: 12),
-                      _buildFilterDropdownCard(
-                        title: 'Teacher',
-                        icon: Icons.person_outline,
-                        isLoading: isLoadingTeachers,
-                        child: DropdownButton<Teacher>(
-                          isExpanded: true,
-                          value: selectedTeacher,
-                          hint: const Text('Choose teacher',
-                              style: TextStyle(color: AppColors.textSecondary)),
-                          underline: const SizedBox.shrink(),
-                          dropdownColor: AppColors.cardBackground,
-                          items: teachers
-                              .map((t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Text(
-                                      t.fullName,
-                                      style: const TextStyle(
-                                          color: AppColors.textPrimary),
-                                    ),
-                                  ))
-                              .toList(),
-                          onChanged: (teacher) async {
-                            Navigator.of(context).pop();
-                            await _onTeacherSelected(teacher);
-                            _showFilterDialog();
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (selectedTeacher != null)
-                        _buildFilterDropdownCard(
-                          title: 'Class & Subject',
-                          icon: Icons.school_outlined,
-                          isLoading: isLoadingClasses,
-                          child: DropdownButton<dynamic>(
-                            isExpanded: true,
-                            value: selectedClassData,
-                            hint: const Text('Choose class & subject',
-                                style:
-                                    TextStyle(color: AppColors.textSecondary)),
-                            underline: const SizedBox.shrink(),
-                            dropdownColor: AppColors.cardBackground,
-                            items: teacherClasses
-                                .map((c) => DropdownMenuItem(
-                                      value: c,
-                                      child: Text(
-                                        '${c['class']} - ${c['subjectName']} (${c['medium']})',
-                                        style: const TextStyle(
-                                            color: AppColors.textPrimary),
-                                      ),
-                                    ))
-                                .toList(),
-                            onChanged: (classData) {
-                              Navigator.of(context).pop();
-                              _onClassSelected(classData);
-                              _showFilterDialog();
-                            },
+                    child: Row(
+                      children: const [
+                        Icon(Icons.filter_list, color: Colors.white, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Filter Options',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          Navigator.of(context).pop();
-                          await _loadAttendanceRecords();
-                        },
-                        icon: isLoadingRecords
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white),
-                                ))
-                            : const Icon(Icons.search),
-                        label: Text(isLoadingRecords
-                            ? 'Searching...'
-                            : 'Search Records'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
-            ],
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildDateRangeCard(),
+                          const SizedBox(height: 12),
+                          _buildFilterDropdownCard(
+                            title: 'Teacher',
+                            icon: Icons.person_outline,
+                            isLoading: isLoadingTeachers,
+                            child: DropdownButton<Teacher>(
+                              isExpanded: true,
+                              value: selectedTeacher,
+                              hint: const Text('Choose teacher',
+                                  style: TextStyle(
+                                      color: AppColors.textSecondary)),
+                              underline: const SizedBox.shrink(),
+                              dropdownColor: AppColors.cardBackground,
+                              items: teachers
+                                  .map((t) => DropdownMenuItem(
+                                        value: t,
+                                        child: Text(
+                                          t.fullName,
+                                          style: const TextStyle(
+                                              color: AppColors.textPrimary),
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (teacher) async {
+                                if (teacher == null ||
+                                    teacher == selectedTeacher) return;
+                                setState(() {
+                                  selectedTeacher = teacher;
+                                  selectedClassData = null;
+                                  teacherClasses = [];
+                                  isLoadingClasses = true;
+                                });
+                                // Only fetch if not already loaded for this teacher
+                                try {
+                                  teacherClasses = await AttendanceService
+                                      .getClassesForTeacher(
+                                          teacherId: teacher.id);
+                                } catch (e) {
+                                  if (mounted)
+                                    setState(() =>
+                                        error = 'Error loading classes: $e');
+                                  teacherClasses = [];
+                                } finally {
+                                  if (mounted)
+                                    setState(() => isLoadingClasses = false);
+                                }
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          if (selectedTeacher != null)
+                            _buildFilterDropdownCard(
+                              title: 'Class & Subject',
+                              icon: Icons.school_outlined,
+                              isLoading: isLoadingClasses,
+                              child: DropdownButton<dynamic>(
+                                isExpanded: true,
+                                value: selectedClassData,
+                                hint: const Text('Choose class & subject',
+                                    style: TextStyle(
+                                        color: AppColors.textSecondary)),
+                                underline: const SizedBox.shrink(),
+                                dropdownColor: AppColors.cardBackground,
+                                items: teacherClasses
+                                    .map((c) => DropdownMenuItem(
+                                          value: c,
+                                          child: Text(
+                                            '${c['class']} - ${c['subjectName']} (${c['medium']})',
+                                            style: const TextStyle(
+                                                color: AppColors.textPrimary),
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: (classData) {
+                                  if (classData == null ||
+                                      classData == selectedClassData) return;
+                                  setState(() {
+                                    selectedClassData = classData;
+                                  });
+                                },
+                              ),
+                            ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              Navigator.of(context).pop();
+                              await _loadAttendanceRecords();
+                            },
+                            icon: isLoadingRecords
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ))
+                                : const Icon(Icons.search),
+                            label: Text(isLoadingRecords
+                                ? 'Searching...'
+                                : 'Search Records'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              elevation: 2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
@@ -800,7 +848,6 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // const SizedBox(height: 4),
                 Text(
                   title,
@@ -860,7 +907,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -886,7 +934,10 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        (studentData['studentName']?.substring(0, 1).toUpperCase() ?? '?'),
+                        (studentData['studentName']
+                                ?.substring(0, 1)
+                                .toUpperCase() ??
+                            '?'),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -903,7 +954,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  studentData['studentName'] ?? 'Unknown Student',
+                                  studentData['studentName'] ??
+                                      'Unknown Student',
                                   style: const TextStyle(
                                     color: AppColors.textPrimary,
                                     fontWeight: FontWeight.w700,
@@ -913,7 +965,8 @@ class _AttendanceRecordsScreenState extends State<AttendanceRecordsScreen> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: statusColor.withOpacity(0.13),
                                   borderRadius: BorderRadius.circular(12),

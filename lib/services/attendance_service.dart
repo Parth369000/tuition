@@ -108,10 +108,10 @@ class AttendanceService {
       var headers = {'Content-Type': 'application/json'};
       var request = http.Request('POST', Uri.parse('$baseUrl/getAttendance'));
       request.body = json.encode({
-        "teacherId": teacherId,
+        "teacherId": "",
         "class": className,
         "subjectId": subjectId,
-        "medium": medium,
+        "medium": "",
         "startDate": startDate,
         "endDate": endDate,
       });

@@ -13,6 +13,8 @@ class StudentDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print(student);
+    print(student['imageUrl']);
     return Scaffold(
       backgroundColor: AppColors.scaffoldBackground,
       body: Container(
@@ -153,7 +155,7 @@ class StudentDetailsSheet extends StatelessWidget {
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
@@ -173,16 +175,20 @@ class StudentDetailsSheet extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                child: Text(
-                                  student['fname']?[0]
-                                          ?.toString()
-                                          .toUpperCase() ??
-                                      '?',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: student['imageUrl'] != null &&
+                                          student['imageUrl'].toString().isNotEmpty
+                                      ? Image.network(
+                                          student['imageUrl'],
+                                          width: 64,
+                                          height: 64,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  _buildFallbackAvatar(student),
+                                        )
+                                      : _buildFallbackAvatar(student),
                                 ),
                               ),
                               const SizedBox(width: 20),
@@ -596,4 +602,21 @@ class StudentDetailsSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _buildFallbackAvatar(dynamic student) {
+  return Container(
+    width: 64,
+    height: 64,
+    alignment: Alignment.center,
+    color: Colors.transparent,
+    child: Text(
+      student['fname']?[0]?.toString().toUpperCase() ?? '?',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 32,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
 }

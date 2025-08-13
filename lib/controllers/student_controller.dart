@@ -88,9 +88,11 @@ class StudentController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Create the request body matching the example structure
-      final requestBody = {
-        "studentClass": int.parse(studentClassController.text),
+      var headers = {'Content-Type': 'application/json'};
+      var request = http.Request(
+          'POST', Uri.parse('http://27.116.52.24:8076/addStudent'));
+      request.body = json.encode({
+        "studentClass": studentClassController.text,
         "batch": "Star",
         "feePaid": int.parse(feePaidController.text),
         "feeTotal": int.parse(feeTotalController.text),
@@ -105,43 +107,19 @@ class StudentController extends ChangeNotifier {
         "contact": contactController.text.isEmpty ? "" : contactController.text,
         "parentContact": parentContactController.text,
         "subjectIds": selectedSubjects.toList(),
-      };
-
-      // Create the request
-      var request = http.Request(
-        'POST',
-        Uri.parse('http://27.116.52.24:8076/addStudent'),
-      );
-
-      // Set headers
-      request.headers.addAll({
-        'Content-Type': 'application/json',
       });
+      request.headers.addAll(headers);
 
-      // Set the request body as JSON string
-      request.body = json.encode(requestBody);
-
-      print('Sending request with body: ${request.body}');
-      final response = await request.send();
+      http.StreamedResponse response = await request.send();
       final responseBody = await response.stream.bytesToString();
-      print('Response body: $responseBody');
-
-      if (response.statusCode != 200) {
-        throw Exception('Server error: ${response.statusCode}');
-      }
-
-      final responseData = json.decode(responseBody);
-
-      if (!responseData['errorStatus']) {
-        // Reset form first
+      if (response.statusCode == 200) {
+        final responseData = json.decode(responseBody);
+        // Success logic here (e.g., reset form, show snackbar, navigate)
         resetForm();
-
-        // Show success message
         if (scaffoldKey.currentContext != null) {
           ScaffoldMessenger.of(scaffoldKey.currentContext!).showSnackBar(
             SnackBar(
-              content: Text(responseData['data']['message'] ??
-                  'Student added successfully'),
+              content: Text(responseData['data']['message'] ?? 'Student added successfully'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
               behavior: SnackBarBehavior.floating,
@@ -151,8 +129,6 @@ class StudentController extends ChangeNotifier {
               ),
             ),
           );
-
-          // Navigate to admin home screen
           Navigator.pushAndRemoveUntil(
             scaffoldKey.currentContext!,
             MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
@@ -160,7 +136,8 @@ class StudentController extends ChangeNotifier {
           );
         }
       } else {
-        throw Exception(responseData['message'] ?? 'Failed to add student');
+        // Handle error
+        throw Exception('Server error: ${response.statusCode}');
       }
     } catch (e) {
       print('Error adding student: $e');

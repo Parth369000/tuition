@@ -152,7 +152,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
       );
       try {
         final fileName = name ?? path.basename(filePath);
-        final downloadedFile = await MaterialUtils.downloadPdf(
+        final downloadedFile = await MaterialUtils.downloadMaterial(
           filePath,
           fileName,
           onProgress: (p) {
@@ -175,8 +175,8 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
         Navigator.of(context).pop(); // Close progress dialog
 
         // Check file extension to determine if it's an image or PDF
-        final extension = path.extension(fileName).toLowerCase();
-        if (extension == '.pdf') {
+        final ext = path.extension(fileName).toLowerCase();
+        if (ext == '.pdf') {
           // Open PDF viewer
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -186,8 +186,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
               ),
             ),
           );
-        } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
-            .contains(extension)) {
+        } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].contains(ext)) {
           // Open image viewer
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -210,7 +209,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
             ),
           );
         } else {
-          throw Exception('Unsupported file type: $extension');
+          throw Exception('Unsupported file type: $ext');
         }
       } catch (e) {
         Navigator.of(context).pop(); // Close progress dialog if error
@@ -257,6 +256,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     String? materialType = 'file';
     String? youtubeUrl;
     String? videoTitle;
+    String? materialTitle;
     File? pickedFile;
     bool isUploading = false;
     await showDialog(
@@ -273,96 +273,115 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                     color: AppColors.secondary,
                     fontWeight: FontWeight.bold,
                   )),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Radio<String>(
-                        value: 'file',
-                        groupValue: materialType,
-                        onChanged: (val) {
-                          setState(() => materialType = val);
-                        },
-                        activeColor: AppColors.secondary,
-                      ),
-                      Text('PDF',
-                          style: TextStyle(color: AppColors.textPrimary)),
-                      Radio<String>(
-                        value: 'video',
-                        groupValue: materialType,
-                        onChanged: (val) {
-                          setState(() => materialType = val);
-                        },
-                        activeColor: AppColors.secondary,
-                      ),
-                      Text('YouTube URL',
-                          style: TextStyle(color: AppColors.textPrimary)),
-                    ],
-                  ),
-                  if (materialType == 'video') ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'Video Title',
-                        hintText: 'Enter video title',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (val) => videoTitle = val,
-                      style: TextStyle(color: AppColors.textPrimary),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: 'YouTube URL',
-                        hintText: 'https://www.youtube.com/watch?v=...',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (val) => youtubeUrl = val,
-                      style: TextStyle(color: AppColors.textPrimary),
-                    ),
-                  ],
-                  if (materialType == 'file')
-                    Column(
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: () async {
-                            FilePickerResult? result = await FilePicker.platform
-                                .pickFiles(
-                                    type: FileType.custom,
-                                    allowedExtensions: ['pdf']);
-                            if (result != null &&
-                                result.files.single.path != null) {
-                              setState(() {
-                                pickedFile = File(result.files.single.path!);
-                              });
-                            }
+                        Radio<String>(
+                          value: 'file',
+                          groupValue: materialType,
+                          onChanged: (val) {
+                            setState(() => materialType = val);
+                            setState(() => pickedFile = null);
                           },
-                          icon: Icon(Icons.attach_file,
-                              color: AppColors.secondary),
-                          label: Text('Pick PDF File',
-                              style: TextStyle(color: AppColors.secondary)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                AppColors.secondary.withOpacity(0.08),
-                            foregroundColor: AppColors.primary,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
+                          activeColor: AppColors.secondary,
                         ),
-                        if (pickedFile != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              'Selected: ${pickedFile!.path.split('/').last}',
-                              style: TextStyle(color: AppColors.textPrimary),
-                            ),
-                          ),
+                        Text('File',
+                            style: TextStyle(color: AppColors.textPrimary)),
+                        Radio<String>(
+                          value: 'video',
+                          groupValue: materialType,
+                          onChanged: (val) {
+                            setState(() => materialType = val);
+                            setState(() => pickedFile = null);
+                          },
+                          activeColor: AppColors.secondary,
+                        ),
+                        Text('YouTube URL',
+                            style: TextStyle(color: AppColors.textPrimary)),
                       ],
                     ),
-                ],
+                    if (materialType == 'file') ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Title',
+                          hintText: 'Enter material title',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (val) => materialTitle = val,
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          FilePickerResult? result = await FilePicker.platform
+                              .pickFiles(
+                                  type: FileType.custom,
+                                  allowedExtensions: [
+                                'pdf',
+                                'jpg',
+                                'jpeg',
+                                'png',
+                                'gif',
+                                'bmp'
+                              ]);
+                          if (result != null &&
+                              result.files.single.path != null) {
+                            setState(() {
+                              pickedFile = File(result.files.single.path!);
+                            });
+                          }
+                        },
+                        icon:
+                            Icon(Icons.attach_file, color: AppColors.secondary),
+                        label: Text('Pick File',
+                            style: TextStyle(color: AppColors.secondary)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              AppColors.secondary.withOpacity(0.08),
+                          foregroundColor: AppColors.primary,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                      if (pickedFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            'Selected: ${pickedFile!.path.split("/").last}',
+                            style: TextStyle(color: AppColors.textPrimary),
+                          ),
+                        ),
+                    ],
+                    if (materialType == 'video') ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Video Title',
+                          hintText: 'Enter video title',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (val) => videoTitle = val,
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'YouTube URL',
+                          hintText: 'https://www.youtube.com/watch?v=...',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (val) => youtubeUrl = val,
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -379,30 +398,50 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                             if (pickedFile == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                      content:
-                                          Text('Please pick a PDF file.')));
+                                      content: Text('Please pick a file.')));
                               setState(() => isUploading = false);
                               return;
                             }
+                            if (materialTitle == null ||
+                                materialTitle!.trim().isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Please enter a title.')));
+                              setState(() => isUploading = false);
+                              return;
+                            }
+                            // Detect file type by extension
+                            final ext =
+                                pickedFile!.path.split('.').last.toLowerCase();
+                            String category = 'file';
+                            if (['jpg', 'jpeg', 'png', 'gif', 'bmp']
+                                .contains(ext)) {
+                              category = 'image';
+                            }
                             try {
-                              final success = await MaterialUtils.uploadPdf(
+                              // Rename the file to the title before uploading
+                              final tempDir = await getTemporaryDirectory();
+                              final renamedFile = await pickedFile!.copy(
+                                '${tempDir.path}/${materialTitle!.trim()}.$ext',
+                              );
+                              final success =
+                                  await MaterialUtils.uploadMaterial(
                                 teacherId: widget.teacherId,
                                 selectedClass: selectedClass ?? '',
                                 selectedBatch: selectedBatch ?? '',
-                                file: pickedFile!,
+                                file: renamedFile,
+                                category: category,
                               );
                               if (success) {
                                 Navigator.of(context).pop();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text(
-                                            'PDF uploaded successfully!')));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        '${category == 'file' ? 'PDF' : 'Image'} uploaded successfully!')));
                                 _fetchMaterials();
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content:
-                                            Text('Failed to upload PDF.')));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        'Failed to upload ${category == 'file' ? 'PDF' : 'image'}.')));
                               }
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -1100,7 +1139,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) {
+      builder: (dialogContext) {
         return FutureBuilder<List<dynamic>>(
           future: AttendanceUtils.fetchStudentsForAttendance(
             teacherId: widget.teacherId,
@@ -1364,7 +1403,7 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
 
                                         if (result['success']) {
                                           if (mounted) {
-                                            Navigator.of(context).pop();
+                                            Navigator.of(dialogContext).pop();
                                             ScaffoldMessenger.of(context)
                                                 .showSnackBar(
                                               const SnackBar(
@@ -1382,13 +1421,29 @@ class _ClassDetailsScreenState extends State<ClassDetailsScreen> {
                                         }
                                       } catch (e) {
                                         if (mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content: Text('Error: $e'),
-                                              backgroundColor: AppColors.error,
-                                            ),
-                                          );
+                                          final errorMsg = e.toString();
+                                          if (errorMsg.contains(
+                                              'Cannot mark attendance for a future date')) {
+                                            Navigator.of(dialogContext).pop();
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'You cannot mark attendance for a future date.'),
+                                                backgroundColor:
+                                                    AppColors.error,
+                                              ),
+                                            );
+                                          } else {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text('Error: $e'),
+                                                backgroundColor:
+                                                    AppColors.error,
+                                              ),
+                                            );
+                                          }
                                         }
                                       } finally {
                                         if (mounted) {

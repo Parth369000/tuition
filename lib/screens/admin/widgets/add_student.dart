@@ -831,53 +831,37 @@ class _StudentFormWidgetState extends State<StudentFormWidget> {
                                           },
                                         ),
                                       ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: _buildInputField(
-                                              controller:
-                                                  controller.feePaidController,
-                                              label: 'Fee Paid',
-                                              icon: Icons.payments,
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.isEmpty) {
-                                                  return 'Fee paid is required';
-                                                }
-                                                if (double.tryParse(value) ==
-                                                    null) {
-                                                  return 'Please enter a valid amount';
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: _buildInputField(
-                                              controller:
-                                                  controller.feeTotalController,
-                                              label: 'Total Fee',
-                                              icon:
-                                                  Icons.account_balance_wallet,
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.isEmpty) {
-                                                  return 'Total fee is required';
-                                                }
-                                                if (double.tryParse(value) ==
-                                                    null) {
-                                                  return 'Please enter a valid amount';
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                          ),
-                                        ],
+                                      _buildInputField(
+                                        controller:
+                                            controller.feePaidController,
+                                        label: 'Fee Paid',
+                                        icon: Icons.payments,
+                                        keyboardType: TextInputType.number,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Fee paid is required';
+                                          }
+                                          if (double.tryParse(value) == null) {
+                                            return 'Please enter a valid amount';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      _buildInputField(
+                                        controller:
+                                            controller.feeTotalController,
+                                        label: 'Total Fee',
+                                        icon: Icons.account_balance_wallet,
+                                        keyboardType: TextInputType.number,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Total fee is required';
+                                          }
+                                          if (double.tryParse(value) == null) {
+                                            return 'Please enter a valid amount';
+                                          }
+                                          return null;
+                                        },
                                       ),
                                       _buildInputField(
                                         controller:
@@ -1144,201 +1128,27 @@ class _StudentFormWidgetState extends State<StudentFormWidget> {
                                           },
                                         ),
                                       ),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Container(
-                                              margin: const EdgeInsets.only(
-                                                  bottom: 14, right: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: AppColors.primary
-                                                        .withOpacity(0.1),
-                                                    blurRadius: 4,
-                                                    offset: const Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: TextFormField(
-                                                controller:
-                                                    controller.fnameController,
-                                                style: const TextStyle(
-                                                  color: AppColors.textPrimary,
-                                                  fontSize: 16,
-                                                ),
-                                                decoration: InputDecoration(
-                                                  labelText: 'First Name',
-                                                  floatingLabelBehavior:
-                                                      FloatingLabelBehavior
-                                                          .auto,
-                                                  labelStyle: const TextStyle(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  floatingLabelStyle:
-                                                      const TextStyle(
-                                                    color: AppColors.primary,
-                                                    fontSize: 15,
-                                                  ),
-                                                  prefixIcon: Container(
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                            left: 12, right: 8),
-                                                    child: Icon(
-                                                      Icons.person,
-                                                      color: AppColors.primary,
-                                                      size: 20,
-                                                    ),
-                                                  ),
-                                                  prefixIconConstraints:
-                                                      const BoxConstraints(
-                                                          minWidth: 40,
-                                                          minHeight: 40),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide(
-                                                      color: AppColors.primary,
-                                                      width: 1.5,
-                                                    ),
-                                                  ),
-                                                  filled: true,
-                                                  fillColor: Colors.white,
-                                                  contentPadding:
-                                                      const EdgeInsets
-                                                          .symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 16,
-                                                  ),
-                                                ),
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'First name is required';
-                                                  }
-                                                  return null;
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Container(
-                                              margin: const EdgeInsets.only(
-                                                  bottom: 14, left: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: AppColors.primary
-                                                        .withOpacity(0.1),
-                                                    blurRadius: 4,
-                                                    offset: const Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: TextFormField(
-                                                controller:
-                                                    controller.mnameController,
-                                                style: const TextStyle(
-                                                  color: AppColors.textPrimary,
-                                                  fontSize: 16,
-                                                ),
-                                                decoration: InputDecoration(
-                                                  labelText: 'Middle Name',
-                                                  floatingLabelBehavior:
-                                                      FloatingLabelBehavior
-                                                          .auto,
-                                                  labelStyle: const TextStyle(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                  floatingLabelStyle:
-                                                      const TextStyle(
-                                                    color: AppColors.primary,
-                                                    fontSize: 15,
-                                                  ),
-                                                  prefixIcon: Container(
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                            left: 12, right: 8),
-                                                    child: Icon(
-                                                      Icons.person,
-                                                      color: AppColors.primary,
-                                                      size: 20,
-                                                    ),
-                                                  ),
-                                                  prefixIconConstraints:
-                                                      const BoxConstraints(
-                                                          minWidth: 40,
-                                                          minHeight: 40),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  enabledBorder:
-                                                      OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide.none,
-                                                  ),
-                                                  focusedBorder:
-                                                      OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    borderSide: BorderSide(
-                                                      color: AppColors.primary,
-                                                      width: 1.5,
-                                                    ),
-                                                  ),
-                                                  filled: true,
-                                                  fillColor: Colors.white,
-                                                  contentPadding:
-                                                      const EdgeInsets
-                                                          .symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 16,
-                                                  ),
-                                                ),
-                                                validator: (value) {
-                                                  if (value == null ||
-                                                      value.isEmpty) {
-                                                    return 'Middle name is required';
-                                                  }
-                                                  return null;
-                                                },
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                      _buildInputField(
+                                        controller: controller.fnameController,
+                                        label: 'First Name',
+                                        icon: Icons.person,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'First name is required';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      _buildInputField(
+                                        controller: controller.mnameController,
+                                        label: 'Middle Name',
+                                        icon: Icons.person,
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Middle name is required';
+                                          }
+                                          return null;
+                                        },
                                       ),
                                       Container(
                                         margin:

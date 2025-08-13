@@ -16,6 +16,10 @@ import '../../widgets/custom_bottom_navigation.dart';
 import 'student_report_screen.dart';
 import '../../widgets/liquid_glass_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../teacher/utils/material_utils.dart';
+import 'package:path/path.dart' as path;
+import 'timed_pdf_viewer_screen.dart';
+import 'package:tuition/controllers/subject_controller.dart';
 
 class StudentHomeScreen extends StatefulWidget {
   final String token;
@@ -54,11 +58,13 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   List<dynamic> _tuitionMaterials = [];
   bool _isLoadingTuitionMaterials = false;
   String? _tuitionMaterialError;
+  Map<int, String> _subjectIdToName = {};
+  bool _isSubjectsLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchTuitionMaterials();
+    _fetchSubjectsAndMaterials();
   }
 
   Future<void> _loadMaterials() async {
@@ -315,7 +321,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       request.body = json.encode({
         "teacherId": 2,
         "class": widget.student['class'].toString(),
-        "batch": widget.student['medium']?.toString() ?? '',
+        // No batch in request
       });
       request.headers.addAll(headers);
       final streamedResponse = await request.send();
@@ -325,6 +331,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         if (data['errorStatus'] == false) {
           setState(() {
             _tuitionMaterials = data['data'] ?? [];
+            print('Student medium: ${widget.student['medium']}');
+            print('Fetched tuition materials: ${_tuitionMaterials.toString()}');
+            for (final m in _tuitionMaterials) {
+              print('Material batch: ${m['batch']}');
+            }
           });
         } else {
           setState(() {
@@ -345,6 +356,25 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       setState(() {
         _isLoadingTuitionMaterials = false;
       });
+    }
+  }
+
+  Future<void> _fetchSubjectsAndMaterials() async {
+    setState(() {
+      _isSubjectsLoading = true;
+    });
+    try {
+      final subjects = await SubjectController().getSubjects();
+      setState(() {
+        _subjectIdToName = {for (var s in subjects) s.id: s.name};
+        _isSubjectsLoading = false;
+      });
+      await _fetchTuitionMaterials();
+    } catch (e) {
+      setState(() {
+        _isSubjectsLoading = false;
+      });
+      await _fetchTuitionMaterials();
     }
   }
 
@@ -512,158 +542,77 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   Widget _buildTuitionMaterialList() {
-    return Column(
-      children: [
-        // Custom header instead of AppBar
-        Container(
-          padding:
-              const EdgeInsets.only(top: 18, left: 8, right: 8, bottom: 12),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-            borderRadius:
-                const BorderRadius.vertical(bottom: Radius.circular(18)),
+    final String studentMedium =
+        (widget.student['medium']?.toString() ?? '').trim().toLowerCase();
+    if (_isSubjectsLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    // Group by unique batch for the student's medium
+    Map<String, List<dynamic>> groupedByBatch = {};
+    for (final m in _tuitionMaterials) {
+      final batch = (m['batch'] ?? '').trim();
+      if (batch.toLowerCase().startsWith('$studentMedium-')) {
+        groupedByBatch.putIfAbsent(batch, () => []);
+        groupedByBatch[batch]!.add(m);
+      }
+    }
+    print('Grouped batches: ${groupedByBatch.keys.toList()}');
+    if (groupedByBatch.isEmpty) {
+      return Center(
+        child: Text(
+          'No tuition materials available.',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () {
-                  setState(() {
-                    _showTuitionMaterialList = false;
-                  });
-                },
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: groupedByBatch.entries.map((entry) {
+        final batch = entry.key;
+        final mats = entry.value;
+        final parts = batch.split('-');
+        String batchDisplay = batch;
+        if (parts.length == 2) {
+          final medium = parts[0];
+          final subjectId = int.tryParse(parts[1]);
+          final subjectName =
+              _subjectIdToName[subjectId] ?? 'Subject $subjectId';
+          batchDisplay = '$medium - $subjectName';
+        }
+        return Card(
+          margin: const EdgeInsets.only(bottom: 24),
+          elevation: 5,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: ListTile(
+            leading: Icon(Icons.label, color: AppColors.primary),
+            title: Text(
+              batchDisplay,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
               ),
-              const SizedBox(width: 6),
-              const Text(
-                'Tuition Material',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  letterSpacing: 0.5,
+            ),
+            subtitle: Text('${mats.length} file${mats.length == 1 ? '' : 's'}'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _BatchMaterialsScreen(
+                    batchName: batchDisplay,
+                    materials: mats,
+                  ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        ),
-        Expanded(
-          child: _isLoadingTuitionMaterials
-              ? const Center(child: CircularProgressIndicator())
-              : _tuitionMaterialError != null
-                  ? Center(
-                      child: Text(
-                        _tuitionMaterialError!,
-                        style: TextStyle(color: AppColors.error),
-                      ),
-                    )
-                  : _tuitionMaterials.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No tuition materials available.',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(18),
-                          itemCount: _tuitionMaterials.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final material = _tuitionMaterials[index];
-                            return Material(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () {
-                                  if (material['category'] == 'file' &&
-                                      material['filePath'] != null) {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => PdfViewerScreen(
-                                          filePath: material['filePath'] ?? '',
-                                          title: material['fileName'] ??
-                                              'PDF Document',
-                                        ),
-                                      ),
-                                    );
-                                  } else if (material['category'] == 'video' &&
-                                      material['videoLink'] != null) {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => YoutubePlayerScreen(
-                                          videoUrl: material['videoLink'] ?? '',
-                                          title:
-                                              material['fileName'] ?? 'Video',
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                            'Unknown or missing material type'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 14),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary
-                                              .withOpacity(0.13),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Icon(
-                                          material['category'] == 'file'
-                                              ? Icons.picture_as_pdf
-                                              : Icons.video_library,
-                                          color: AppColors.primary,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Text(
-                                          material['fileName'] ??
-                                              material['category'] ??
-                                              'Untitled',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(Icons.arrow_forward_ios,
-                                          color: AppColors.iconSecondary,
-                                          size: 16),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 
@@ -818,16 +767,104 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () {
+                onTap: () async {
                   if (material['category'] == 'file') {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => PdfViewerScreen(
-                          filePath: material['filePath'] ?? '',
-                          title: material['name'] ?? 'PDF Document',
-                        ),
-                      ),
+                    double progress = 0.0;
+                    final fileName = material['fileName'] ??
+                        path.basename(material['filePath']);
+                    final extension = path.extension(fileName).toLowerCase();
+                    String progressMessage = 'Downloading file...';
+                    if (extension == '.pdf') {
+                      progressMessage = 'Downloading PDF...';
+                    } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+                        .contains(extension)) {
+                      progressMessage = 'Downloading image...';
+                    }
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) {
+                        return StatefulBuilder(
+                          builder: (context, setState) {
+                            return AlertDialog(
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(progressMessage),
+                                  const SizedBox(height: 20),
+                                  LinearProgressIndicator(value: progress),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                      '${(progress * 100).toStringAsFixed(0)}%'),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
                     );
+                    try {
+                      final downloadedFile =
+                          await MaterialUtils.downloadMaterial(
+                        material['filePath'],
+                        fileName,
+                        onProgress: (p) {
+                          progress = p;
+                          if (Navigator.of(context).canPop()) {
+                            (context as Element).markNeedsBuild();
+                          }
+                        },
+                      );
+                      Navigator.of(context).pop(); // Close progress dialog
+                      if (downloadedFile == null ||
+                          !await downloadedFile.exists()) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text('File not found after download!')),
+                        );
+                        return;
+                      }
+                      if (extension == '.pdf') {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => PdfViewerScreen(
+                              filePath: downloadedFile.path,
+                              title: fileName,
+                            ),
+                          ),
+                        );
+                      } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+                          .contains(extension)) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar: AppBar(
+                                title: Text(fileName),
+                                backgroundColor: AppColors.primary,
+                              ),
+                              body: InteractiveViewer(
+                                minScale: 0.5,
+                                maxScale: 4.0,
+                                child: Center(
+                                  child: Image.file(
+                                    downloadedFile,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      } else {
+                        throw Exception('Unsupported file type: $extension');
+                      }
+                    } catch (e) {
+                      Navigator.of(context)
+                          .pop(); // Close progress dialog if error
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
                   } else if (material['category'] == 'video') {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -1172,56 +1209,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    test['title'],
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: hasMarks
-                        ? AppColors.success.withOpacity(0.15)
-                        : isActive
-                            ? AppColors.primary.withOpacity(0.15)
-                            : AppColors.textSecondary.withOpacity(0.13),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    hasMarks
-                        ? 'Graded'
-                        : isActive
-                            ? 'Active'
-                            : isUpcoming
-                                ? 'Upcoming'
-                                : 'Completed',
-                    style: TextStyle(
-                      color: hasMarks
-                          ? AppColors.success
-                          : isActive
-                              ? AppColors.primary
-                              : AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              test['title'] ?? 'Test',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Color(0xFF2A4759),
+              ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             if (test['description'] != null &&
                 test['description'].toString().isNotEmpty)
               Padding(
@@ -1234,7 +1234,6 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   ),
                 ),
               ),
-            // Info Row
             Row(
               children: [
                 Icon(Icons.access_time,
@@ -1249,7 +1248,106 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 ),
               ],
             ),
-            if (hasMarks) ...[
+            if (isAvailable &&
+                !isUpcoming &&
+                (test['questionPaperPath'] != null &&
+                    test['questionPaperPath'].toString().isNotEmpty)) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Loading question paper...'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                      final questionPaperPath = test['questionPaperPath'];
+                      if (questionPaperPath == null ||
+                          questionPaperPath.toString().isEmpty) {
+                        throw Exception('Question paper not available');
+                      }
+                      final questionPaperUrl =
+                          'http://27.116.52.24:8076/$questionPaperPath';
+                      print('Loading question paper from: $questionPaperUrl');
+                      final response =
+                          await http.get(Uri.parse(questionPaperUrl));
+                      if (response.statusCode == 200) {
+                        final tempDir = await getTemporaryDirectory();
+                        final file = File('${tempDir.path}/question_paper.pdf');
+                        await file.writeAsBytes(response.bodyBytes);
+                        final fileName = test['title'] != null
+                            ? '${test['title']}.pdf'
+                            : 'test.pdf';
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => TimedPdfViewerScreen(
+                              filePath: file.path,
+                              title: fileName,
+                              endTime: endTime,
+                            ),
+                          ),
+                        );
+                      } else {
+                        throw Exception('Failed to download question paper');
+                      }
+                    } catch (e) {
+                      print('Error loading question paper: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error loading question paper: $e'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.description,
+                      color: Colors.white, size: 18),
+                  label: const Text('View Question Paper',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+            if (!isAvailable && test['marks'] == null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.13),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, size: 15, color: AppColors.error),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Marks not uploaded',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (!isAvailable && test['marks'] != null) ...[
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1273,99 +1371,75 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   ],
                 ),
               ),
-            ],
-            const SizedBox(height: 16),
-            // Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  try {
-                    // Show loading indicator
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Loading question paper...'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-
-                    // Get the question paper path from the test data
-                    final questionPaperPath = test['questionPaperPath'];
-                    if (questionPaperPath == null ||
-                        questionPaperPath.toString().isEmpty) {
-                      throw Exception('Question paper not available');
-                    }
-
-                    // Construct the full URL for the question paper
-                    final questionPaperUrl =
-                        'http://27.116.52.24:8076/getAvailableTests/$questionPaperPath';
-                    print('Loading question paper from: $questionPaperUrl');
-
-                    // Download the PDF file
-                    final response =
-                        await http.get(Uri.parse(questionPaperUrl));
-                    if (response.statusCode == 200) {
-                      // Get temporary directory
-                      final tempDir = await getTemporaryDirectory();
-                      final file = File('${tempDir.path}/question_paper.pdf');
-
-                      // Write the PDF to the file
-                      await file.writeAsBytes(response.bodyBytes);
-
-                      // Navigate to PDF viewer
-                      if (mounted) {
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Loading question paper...'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                      final questionPaperPath = test['questionPaperPath'];
+                      if (questionPaperPath == null ||
+                          questionPaperPath.toString().isEmpty) {
+                        throw Exception('Question paper not available');
+                      }
+                      final questionPaperUrl =
+                          'http://27.116.52.24:8076/$questionPaperPath';
+                      print('Loading question paper from: $questionPaperUrl');
+                      final response =
+                          await http.get(Uri.parse(questionPaperUrl));
+                      if (response.statusCode == 200) {
+                        final tempDir = await getTemporaryDirectory();
+                        final file = File('${tempDir.path}/question_paper.pdf');
+                        await file.writeAsBytes(response.bodyBytes);
+                        final fileName = test['title'] != null
+                            ? '${test['title']}.pdf'
+                            : 'test.pdf';
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => Scaffold(
-                              appBar: AppBar(
-                                title: Text(test['title']),
-                                backgroundColor: AppColors.primary,
-                              ),
-                              body: PDFView(
-                                filePath: file.path,
-                                enableSwipe: true,
-                                swipeHorizontal: false,
-                                autoSpacing: true,
-                                pageFling: true,
-                                pageSnap: true,
-                                fitPolicy: FitPolicy.BOTH,
-                                preventLinkNavigation: false,
-                              ),
+                            builder: (_) => PdfViewerScreen(
+                              filePath: file.path,
+                              title: fileName,
                             ),
                           ),
                         );
+                      } else {
+                        throw Exception('Failed to download question paper');
                       }
-                    } else {
-                      throw Exception('Failed to download question paper');
+                    } catch (e) {
+                      print('Error loading question paper: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error loading question paper: $e'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
                     }
-                  } catch (e) {
-                    print('Error loading question paper: $e');
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error loading question paper: $e'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    }
-                  }
-                },
-                icon: const Icon(Icons.description,
-                    color: Colors.white, size: 18),
-                label: const Text('View Question Paper',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  },
+                  icon: const Icon(Icons.description,
+                      color: Colors.white, size: 18),
+                  label: const Text('View Question Paper',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 2,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1724,95 +1798,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                             ),
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(18),
-                          itemCount: _tuitionMaterials.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final material = _tuitionMaterials[index];
-                            return Material(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(14),
-                                onTap: () {
-                                  if (material['category'] == 'file' &&
-                                      material['filePath'] != null) {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => PdfViewerScreen(
-                                          filePath: material['filePath'] ?? '',
-                                          title: material['fileName'] ??
-                                              'PDF Document',
-                                        ),
-                                      ),
-                                    );
-                                  } else if (material['category'] == 'video' &&
-                                      material['videoLink'] != null) {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => YoutubePlayerScreen(
-                                          videoUrl: material['videoLink'] ?? '',
-                                          title:
-                                              material['fileName'] ?? 'Video',
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                            'Unknown or missing material type'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 14),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.primary
-                                              .withOpacity(0.13),
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Icon(
-                                          material['category'] == 'file'
-                                              ? Icons.picture_as_pdf
-                                              : Icons.video_library,
-                                          color: AppColors.primary,
-                                          size: 22,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Text(
-                                          material['fileName'] ??
-                                              material['category'] ??
-                                              'Untitled',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ),
-                                      Icon(Icons.arrow_forward_ios,
-                                          color: AppColors.iconSecondary,
-                                          size: 16),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ))
+                      : _buildTuitionMaterialList())
           : _showSubjectCards
               ? _buildSubjectCards()
               : Column(
@@ -1860,6 +1846,208 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _BatchMaterialsScreen extends StatelessWidget {
+  final String batchName;
+  final List<dynamic> materials;
+  const _BatchMaterialsScreen(
+      {Key? key, required this.batchName, required this.materials})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(batchName),
+        backgroundColor: Colors.transparent,
+        elevation: 4,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2A4759),
+                Color(0xFF1E3440),
+                Color(0xFF152A35),
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+        ),
+      ),
+      backgroundColor: AppColors.scaffoldBackground,
+      body: ListView.separated(
+        padding: const EdgeInsets.all(18),
+        itemCount: materials.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final material = materials[index];
+          return Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () async {
+                // (reuse your existing onTap logic for opening files/videos)
+                if (material['category'] == 'file' &&
+                    material['filePath'] != null) {
+                  double progress = 0.0;
+                  final fileName = material['fileName'] ??
+                      path.basename(material['filePath']);
+                  final extension = path.extension(fileName).toLowerCase();
+                  String progressMessage = 'Downloading file...';
+                  if (extension == '.pdf') {
+                    progressMessage = 'Downloading PDF...';
+                  } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+                      .contains(extension)) {
+                    progressMessage = 'Downloading image...';
+                  }
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) {
+                      return StatefulBuilder(
+                        builder: (context, setState) {
+                          return AlertDialog(
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(progressMessage),
+                                const SizedBox(height: 20),
+                                LinearProgressIndicator(value: progress),
+                                const SizedBox(height: 10),
+                                Text('${(progress * 100).toStringAsFixed(0)}%'),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                  try {
+                    final downloadedFile = await MaterialUtils.downloadMaterial(
+                      material['filePath'],
+                      fileName,
+                      onProgress: (p) {
+                        progress = p;
+                        if (Navigator.of(context).canPop()) {
+                          (context as Element).markNeedsBuild();
+                        }
+                      },
+                    );
+                    Navigator.of(context).pop(); // Close progress dialog
+                    if (downloadedFile == null ||
+                        !await downloadedFile.exists()) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text('File not found after download!')),
+                      );
+                      return;
+                    }
+                    if (extension == '.pdf') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PdfViewerScreen(
+                            filePath: downloadedFile.path,
+                            title: fileName,
+                          ),
+                        ),
+                      );
+                    } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+                        .contains(extension)) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(
+                              title: Text(fileName),
+                              backgroundColor: AppColors.primary,
+                            ),
+                            body: InteractiveViewer(
+                              minScale: 0.5,
+                              maxScale: 4.0,
+                              child: Center(
+                                child: Image.file(
+                                  downloadedFile,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    } else {
+                      throw Exception('Unsupported file type: $extension');
+                    }
+                  } catch (e) {
+                    Navigator.of(context)
+                        .pop(); // Close progress dialog if error
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e')),
+                    );
+                  }
+                } else if (material['category'] == 'video' &&
+                    material['videoLink'] != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => YoutubePlayerScreen(
+                        videoUrl: material['videoLink'] ?? '',
+                        title: material['fileName'] ?? 'Video',
+                      ),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Unknown or missing material type'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.13),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        material['category'] == 'file'
+                            ? Icons.picture_as_pdf
+                            : Icons.video_library,
+                        color: AppColors.primary,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        material['fileName'] ??
+                            material['category'] ??
+                            'Untitled',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios,
+                        color: AppColors.iconSecondary, size: 16),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
